@@ -2,7 +2,7 @@
 
 为 DSH 的 `ctx.web` 提供 Tavily 搜索，复用现有 `web_search`。本包只提供插件，由 `packages/banso` 中的统一 Banso bundle 加载并选用；网页获取继续使用 DSH 自带的 HTTP provider。
 
-当前以 DSH `0.2.0-rc.2` 为待验证的兼容目标，尚未执行类型检查、构建、测试或安装验证。
+开发依赖对齐 DSH `0.2.0-rc.2`。用户已确认构建通过，并在本地 DSH 源码宿主中完成 profile 加载及真实搜索；尚未验证 npm CLI 安装版或执行自动化测试。
 
 ## 配置
 
@@ -25,7 +25,7 @@
 
 ## 本地使用
 
-使用 Node.js 24 和 pnpm 12.8.1，在仓库根目录执行以下步骤（尚待验证）：
+使用 Node.js 24 和 pnpm 12.8.1，在仓库根目录执行：
 
 ```sh
 pnpm install --frozen-lockfile

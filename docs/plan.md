@@ -18,4 +18,6 @@
 
 已编写 Tavily provider 初版，并逐步初始化 pnpm workspace、安装依赖及生成锁文件。`packages/web-search-tavily` 只提供插件，`packages/banso` 持有统一 bundle 的组合配置，根包负责工程命令。
 
-当前以 DSH CLI `0.2.0-rc.2` 为待验证的兼容目标，已将 `dsh-web` 和 `dsh-launch-environment` 的开发依赖及 peer 声明对齐到 `0.2.0-rc.2`，并核对锁文件和实际安装版本。阅读新版类型声明后，未发现当前实现所用接口不匹配；web 服务类名与参考源码均为 `WebRuntime`。此结论仅来自文件阅读；尚未新增测试或执行类型检查、构建、profile 安装及真实 API 验证。第一阶段尚未验收，后续验证按讨论结果推进。
+开发依赖及 peer 声明已对齐 DSH `0.2.0-rc.2`。通过 pnpm `packageExtensions` 补齐该版本 `dsh-llm` 类型声明引用但未作为使用方依赖声明的 `dsh-attachment`。
+
+用户已确认构建通过（包含 TypeScript 检查），并在本地 DSH 源码宿主的 `banso-web` profile 中完成 Banso bundle 加载和真实 Tavily 搜索。默认搜索链路已跑通；尚未执行自动化测试，也未验证错误、取消分支或 npm CLI 安装版兼容性。
