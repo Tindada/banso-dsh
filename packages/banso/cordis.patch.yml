@@ -1,0 +1,9 @@
+- insert:
+    - id: web-search-tavily
+      name: banso-dsh-web-search-tavily
+
+# Patch replaces the entire config, so retain the base fetch provider.
+- id: web
+  config:
+    searchProvider: tavily
+    fetchProvider: http
