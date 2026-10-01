@@ -24,6 +24,8 @@ interface TavilySearchResponse {
     url: string
     title: string
     content: string
+    /** Tavily's estimate of publication or last update time. */
+    published_date?: string | null
   }[]
 }
 
@@ -64,6 +66,7 @@ export class TavilySearchProvider implements WebSearchProvider {
           include_answer: false,
           include_raw_content: false,
           include_images: false,
+          include_published_date: true,
           include_usage: true,
         }),
         ...(signal !== undefined ? { signal } : {}),
@@ -105,11 +108,15 @@ export class TavilySearchProvider implements WebSearchProvider {
 function mapResponse(payload: TavilySearchResponse): WebSearchResult {
   // ctx.web owns the final truncation of returned sources.
   return {
-    sources: payload.results.map(item => ({
-      url: item.url,
-      title: item.title,
-      snippet: item.content,
-    })),
+    sources: payload.results.map(item => {
+      const date = item.published_date ? new Date(item.published_date) : undefined
+      return {
+        url: item.url,
+        title: item.title,
+        snippet: item.content,
+        ...(date && !Number.isNaN(date.getTime()) ? { publishedAt: date.toISOString() } : {}),
+      }
+    }),
     truncated: false,
   }
 }
