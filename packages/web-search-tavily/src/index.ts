@@ -24,6 +24,8 @@ export interface Config {
   baseURL?: string
   topic?: TavilyTopic
   searchDepth?: TavilySearchDepth
+  /** Default result count when the request omits maxResults. */
+  maxResults?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -31,6 +33,7 @@ export const Config: z<Config> = z.object({
   baseURL: z.string(),
   topic: z.union(TAVILY_TOPICS),
   searchDepth: z.union(TAVILY_SEARCH_DEPTHS),
+  maxResults: z.number().step(1).min(0),
 })
 
 export function apply(ctx: Context, config: Config): void {
@@ -39,5 +42,6 @@ export function apply(ctx: Context, config: Config): void {
     baseURL: config.baseURL ?? TAVILY_DEFAULT_BASE_URL,
     topic: config.topic ?? TAVILY_DEFAULT_TOPIC,
     searchDepth: config.searchDepth ?? TAVILY_DEFAULT_SEARCH_DEPTH,
+    maxResults: config.maxResults ?? 20,
   }))
 }

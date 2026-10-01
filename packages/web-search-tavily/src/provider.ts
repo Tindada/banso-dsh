@@ -1,5 +1,5 @@
 import { WebError } from '@deepseek-ai/dsh-web'
-import type { WebSearchProvider, WebSearchRequest, WebSearchResult, WebSearchSource } from '@deepseek-ai/dsh-web'
+import type { WebSearchProvider, WebSearchRequest, WebSearchResult } from '@deepseek-ai/dsh-web'
 
 export const TAVILY_PROVIDER_ID = 'tavily'
 export const TAVILY_DEFAULT_BASE_URL = 'https://api.tavily.com'
@@ -16,18 +16,26 @@ export interface TavilySearchProviderOptions {
   baseURL: string
   topic: TavilyTopic
   searchDepth: TavilySearchDepth
+  maxResults: number
 }
 
-const MAX_RESULTS = 20
+interface TavilySearchResponse {
+  results: {
+    url: string
+    title: string
+    content: string
+  }[]
+}
+
+interface TavilyErrorResponse {
+  detail?: { error?: string }
+}
 
 /** Contributes search to ctx.web; does not own provider selection or tool policy. */
 export class TavilySearchProvider implements WebSearchProvider {
   readonly id = TAVILY_PROVIDER_ID
-  private readonly options: TavilySearchProviderOptions
 
-  constructor(options: TavilySearchProviderOptions) {
-    this.options = { ...options, baseURL: options.baseURL.replace(/\/+$/, '') }
-  }
+  constructor(private readonly options: TavilySearchProviderOptions) {}
 
   available(): boolean {
     return this.options.apiKey.trim().length > 0
@@ -37,14 +45,10 @@ export class TavilySearchProvider implements WebSearchProvider {
   }
 
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
+    const maxResults = request.maxResults ?? this.options.maxResults
+    let response: Response
     try {
-      signal?.throwIfAborted()
-      const maxResults = request.maxResults ?? MAX_RESULTS
-      if (!Number.isInteger(maxResults) || maxResults < 0) {
-        throw new WebError('Tavily maxResults must be a non-negative integer', 'WEB_PROVIDER_ERROR')
-      }
-
-      const response = await fetch(`${this.options.baseURL}/search`, {
+      response = await fetch(`${this.options.baseURL}/search`, {
         method: 'POST',
         redirect: 'error',
         headers: {
@@ -54,7 +58,7 @@ export class TavilySearchProvider implements WebSearchProvider {
         },
         body: JSON.stringify({
           query: request.query,
-          max_results: Math.min(maxResults, MAX_RESULTS),
+          max_results: maxResults,
           topic: this.options.topic,
           search_depth: this.options.searchDepth,
           include_answer: false,
@@ -64,65 +68,56 @@ export class TavilySearchProvider implements WebSearchProvider {
         }),
         ...(signal !== undefined ? { signal } : {}),
       })
-
-      if (!response.ok) {
-        // Consume the body so cancellation during body reading remains observable.
-        // Never copy an arbitrary API error body (which may echo credentials) into diagnostics.
-        try {
-          await response.text()
-        } catch (error: unknown) {
-          if (isAborted(error, signal)) throw error
-          // A body read failure must not hide the HTTP status already received.
-        }
-        throw new WebError(`Tavily returned HTTP ${response.status}`, 'WEB_PROVIDER_ERROR')
-      }
-
-      const payload: unknown = await response.json()
-      signal?.throwIfAborted()
-      return mapResponse(payload)
     } catch (error: unknown) {
-      if (isAborted(error, signal)) {
+      if (isAbortError(error)) {
         throw new WebError('Tavily search aborted', 'WEB_ABORTED', { cause: error })
       }
-      if (error instanceof WebError) throw error
-      throw new WebError('Tavily search request or response processing failed', 'WEB_PROVIDER_ERROR', { cause: error })
+      throw new WebError('Tavily search request failed', 'WEB_PROVIDER_ERROR', { cause: error })
+    }
+
+    if (!response.ok) {
+      let message = `Tavily returned HTTP ${response.status}`
+      try {
+        const payload = await response.json() as TavilyErrorResponse
+        const detail = payload.detail?.error
+        if (detail?.trim()) message += `: ${detail}`
+      } catch (error: unknown) {
+        if (isAbortError(error)) {
+          throw new WebError('Tavily search aborted', 'WEB_ABORTED', { cause: error })
+        }
+        // Non-JSON or unreadable error bodies must not hide the HTTP status.
+      }
+      throw new WebError(message, 'WEB_PROVIDER_ERROR')
+    }
+
+    try {
+      const payload = await response.json() as TavilySearchResponse
+      return mapResponse(payload)
+    } catch (error: unknown) {
+      if (isAbortError(error)) {
+        throw new WebError('Tavily search aborted', 'WEB_ABORTED', { cause: error })
+      }
+      throw new WebError('Tavily returned an unprocessable response body', 'WEB_PROVIDER_ERROR', { cause: error })
     }
   }
 }
 
-function mapResponse(payload: unknown): WebSearchResult {
-  if (!isRecord(payload) || !Array.isArray(payload.results)) {
-    throw new WebError('Tavily response is missing a results array', 'WEB_PROVIDER_ERROR')
-  }
-
-  const sources: WebSearchSource[] = []
-  for (const item of payload.results) {
-    // Match BansoAgain: title and URL are required, while content is optional.
-    if (!isRecord(item) || typeof item.title !== 'string' || typeof item.url !== 'string') continue
-    sources.push({
+function mapResponse(payload: TavilySearchResponse): WebSearchResult {
+  // ctx.web owns the final truncation of returned sources.
+  return {
+    sources: payload.results.map(item => ({
       url: item.url,
       title: item.title,
-      ...(typeof item.content === 'string' ? { snippet: item.content } : {}),
-    })
-  }
-  // ctx.web owns truncation; Tavily's API limit does not mean we dropped sources.
-  return { sources, truncated: false }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isValidBaseURL(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return (url.protocol === 'https:' || url.protocol === 'http:')
-      && !url.username && !url.password && !url.search && !url.hash
-  } catch {
-    return false
+      snippet: item.content,
+    })),
+    truncated: false,
   }
 }
 
-function isAborted(error: unknown, signal?: AbortSignal): boolean {
-  return signal?.aborted === true || (error instanceof Error && error.name === 'AbortError')
+function isValidBaseURL(baseURL: string): boolean {
+  return URL.canParse(baseURL)
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
 }

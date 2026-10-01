@@ -12,6 +12,7 @@
 | `baseURL` | `https://api.tavily.com` | Tavily API 地址 |
 | `topic` | `general` | `general`、`news`、`finance` |
 | `searchDepth` | `basic` | `basic`、`advanced`、`fast`、`ultra-fast` |
+| `maxResults` | `20` | 请求未指定数量时使用；现有 `web_search` 会传入自己的数量上限 |
 
 在 DSH 启动环境中设置 `TAVILY_API_KEY`。其他配置可写入 profile 的 `cordis.patch.yml`：
 
@@ -41,10 +42,3 @@ dsh --profile banso-demo
 ```
 
 修改源码后需要重新构建并重启 DSH。当前采用 workspace 本地链接；Banso tarball 不会自动包含 Tavily 包，分发方案待定。
-
-## 当前范围
-
-- 返回 URL、标题和摘要，保留来源顺序；请求数量默认 20，最多 20，最终裁剪由 `ctx.web` 负责。
-- 复用 DSH 的取消和超时机制，不额外重试；错误转换为 `WEB_PROVIDER_ERROR` 或 `WEB_ABORTED`。
-- 暂不支持时间、地区和域名筛选，不输出生成式回答、网页正文、发布日期及 score、publisher、usage 等额外元数据。
-- 旧版 `BANSO_TAVILY_*` 环境变量不自动读取。
