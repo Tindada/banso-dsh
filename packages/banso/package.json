@@ -3,21 +3,28 @@
   "version": "0.1.0",
   "description": "Banso research bundle for DeepSeek Harness",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/copy-base-patch.mjs",
+    "prepack": "node scripts/copy-base-patch.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "banso-dsh-base": "workspace:*",
+    "@deepseek-ai/dsh-web": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-web-fetch-http": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-web": "0.2.0-rc.2",
     "banso-dsh-web-search-tavily": "workspace:*"
   },
-  "files":[
-    "cordis.patch.yml"
+  "files": [
+    "base.patch.yml",
+    "cordis.patch.yml",
+    "scripts/copy-base-patch.mjs"
   ],
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": ["./base.patch.yml", "./cordis.patch.yml"]
     }
   }
 }

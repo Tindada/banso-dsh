@@ -1,0 +1,34 @@
+# Banso 业务 bundle
+
+`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索和 HTTP Fetch，向 agent 提供 `web_search`、`web_fetch`。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+
+## 安装与构建
+
+使用 Node.js 24 和 pnpm 12.8.1，在仓库根目录执行：
+
+```sh
+pnpm install
+pnpm typecheck
+pnpm build
+```
+
+构建会编译 Tavily 插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
+
+## 创建与运行 profile
+
+在 DSH 源码仓库目录执行，替换绝对路径。以下命令用于专用的 `banso-dsh` profile：
+
+```sh
+pnpm dsh plugin --profile banso-dsh add 'link:/absolute/path/to/banso-dsh/packages/banso'
+pnpm dsh plugin --profile banso-dsh exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh"]'
+pnpm dsh --profile banso-dsh --dump-config
+pnpm dsh --profile banso-dsh
+```
+
+运行环境需提供 `DEEPSEEK_API_KEY` 和 `TAVILY_API_KEY`。搜索配置见 [Tavily provider](../web-search-tavily/README.md)。
+
+启动后提供 SDK stdio JSON-RPC 服务，没有聊天界面。Python SDK 客户端选择 `banso-dsh`；若由客户端启动 DSH，无需提前启动服务。
+
+会话沿用基础包的 `sessions-banso-base` 目录，诊断标签仍为 `banso-base`。修改 patch 后需重启；修改基础 patch 时还需重新构建。
+
+新组合的实际搜索、阅读尚待验证，详细进度见 [迁移规划](../../docs/plan.md)。

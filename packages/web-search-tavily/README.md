@@ -2,7 +2,7 @@
 
 为 DSH 的 `ctx.web` 提供 Tavily 搜索，复用现有 `web_search`。本包只提供插件，由 `packages/banso` 中的统一 Banso bundle 加载并选用；网页获取继续使用 DSH 自带的 HTTP provider。
 
-开发依赖对齐 DSH `0.2.0-rc.2`。用户已确认构建通过，并在本地 DSH 源码宿主中完成 profile 加载及真实搜索；尚未验证 npm CLI 安装版或执行自动化测试。
+接口与依赖对齐 DSH `0.2.0-rc.2`。
 
 ## 配置
 
@@ -23,22 +23,8 @@
     searchDepth: basic
 ```
 
-## 本地使用
+## 开发与使用
 
-使用 Node.js 24 和 pnpm 12.8.1，在仓库根目录执行：
+在仓库根目录执行 `pnpm typecheck` 检查类型，`pnpm build` 编译插件。修改源码后需重新构建并重启 DSH。
 
-```sh
-pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm build
-```
-
-准备好 DSH CLI 后，链接 Banso bundle：
-
-```sh
-dsh plugin --profile banso-demo add ./packages/banso
-dsh --profile banso-demo --dump-config
-dsh --profile banso-demo
-```
-
-修改源码后需要重新构建并重启 DSH。当前采用 workspace 本地链接；Banso tarball 不会自动包含 Tavily 包，分发方案待定。
+安装和 profile 操作统一见 [Banso bundle](../banso/README.md)，验证进度见 [迁移规划](../../docs/plan.md)。

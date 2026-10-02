@@ -1,9 +1,18 @@
 - insert:
+    - id: web
+      name: '@deepseek-ai/dsh-web'
+      config:
+        searchProvider: tavily
+        fetchProvider: http
+
     - id: web-search-tavily
       name: banso-dsh-web-search-tavily
 
-# Patch replaces the entire config, so retain the base fetch provider.
-- id: web
-  config:
-    searchProvider: tavily
-    fetchProvider: http
+    - id: web-fetch-http
+      name: '@deepseek-ai/dsh-web-fetch-http'
+
+    - id: tool-web
+      name: '@deepseek-ai/dsh-tool-web'
+      config:
+        search: true
+        fetch: true
