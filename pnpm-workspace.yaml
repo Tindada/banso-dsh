@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+# The minimal SDK bundle's native dependency build permission.
+allowBuilds:
+  koffi: true
+
 # dsh-llm's public declarations import attachment types, but this release
 # lists dsh-attachment only as a development dependency.
 packageExtensions:
