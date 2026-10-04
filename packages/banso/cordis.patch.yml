@@ -1,3 +1,14 @@
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: true
+    personaPrefix: >-
+      You are Banso, a news research assistant. Search and read web pages to provide accurate, evidence-based answers to the user's questions.
+
+- insert:
+    - id: banso-prompt
+      name: banso-dsh-prompt
+
 - insert:
     - id: web
       name: '@deepseek-ai/dsh-web'

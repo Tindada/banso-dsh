@@ -1,6 +1,8 @@
 # Banso 业务 bundle
 
-`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索和 HTTP Fetch，向 agent 提供 `web_search`、`web_fetch`。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、HTTP Fetch 和 [Banso 提示词插件](../prompt/README.md)，向 agent 提供 `web_search`、`web_fetch`、研究规则和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+
+本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。基础包配置不变。
 
 ## 安装与构建
 
@@ -12,7 +14,7 @@ pnpm typecheck
 pnpm build
 ```
 
-构建会编译 Tavily 插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
+构建会编译 Tavily 和提示词插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
 
 ## 创建与运行 profile
 
@@ -31,4 +33,4 @@ pnpm dsh --profile banso-dsh
 
 会话沿用基础包的 `sessions-banso-base` 目录，诊断标签仍为 `banso-base`。修改 patch 后需重启；修改基础 patch 时还需重新构建。
 
-新组合的实际搜索、阅读尚待验证，详细进度见 [迁移规划](../../docs/plan.md)。
+原有搜索、阅读已由用户试跑确认；本次新增提示词和参考时间通过本地模拟模型集成测试，真实模型的研究质量尚待验证。详细进度见 [迁移规划](../../docs/plan.md)。
