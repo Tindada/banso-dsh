@@ -17,7 +17,8 @@
     "@deepseek-ai/dsh-tool-web": "0.2.0-rc.2",
     "banso-dsh-web-search-tavily": "workspace:*",
     "banso-dsh-prompt": "workspace:*",
-    "banso-dsh-materials": "workspace:*"
+    "banso-dsh-materials": "workspace:*",
+    "banso-dsh-tool-web": "workspace:*"
   },
   "files": [
     "base.patch.yml",

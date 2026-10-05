@@ -15,6 +15,10 @@ import Tools from '@deepseek-ai/dsh-tools'
 import Web from '@deepseek-ai/dsh-web'
 import * as WebTools from '@deepseek-ai/dsh-tool-web'
 import * as Materials from '../lib/index.js'
+import * as WrappedTools from 'banso-dsh-tool-web'
+import Invariants from '@deepseek-ai/dsh-invariants'
+import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
+import * as LoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 
 const url = 'https://example.com/article'
 class Adapter extends LlmAdapter {
@@ -40,9 +44,12 @@ class Adapter extends LlmAdapter {
 }
 async function setup(root, enabled = true) {
   const ctx = new Context()
+  const errors = []
+  ctx.on('agent/error', ({ error }) => errors.push(error))
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Jsonl, { root, compression: 'none' })
   await ctx.plugin(Loop, { agents: [] })
+  for (const plugin of [Invariants, SessionInvariant, LoopInvariant]) await ctx.plugin(plugin)
   await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: 'fixture' })
   ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search() {
     return { sources: [{ url, title: 'Article', snippet: 'Preview' }], truncated: false }
@@ -51,14 +58,15 @@ async function setup(root, enabled = true) {
     return { url: url + '/final', statusCode: 200, body: { kind: 'html', content: '<h1>Article</h1><p>Evidence.</p>' }, truncated: false }
   } })
   await ctx.plugin(WebTools)
+  await ctx.plugin(WrappedTools)
   if (enabled) await ctx.plugin(Materials)
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
-  return { ctx, adapter }
+  return { ctx, adapter, errors }
 }
 const stateOf = (ctx, agent) => ctx.sessionProjections.stateOf(agent.session, 'bansoMaterials')
 
-test('real web tools feed projection, survive JSONL resume, and leave model content unchanged', async t => {
+test('wrapped native tools feed materials through metadata, survive JSONL and continue after resume', async t => {
   const root = await mkdtemp(join(tmpdir(), 'banso-materials-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const first = await setup(join(root, 'enabled'))
@@ -67,7 +75,16 @@ test('real web tools feed projection, survive JSONL resume, and leave model cont
   const { agent } = await first.ctx.agents.create({ sessionId: SessionId('research'), agentOptions: { provider: 'mock', model: 'mock' } })
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
   await agent.whenIdle()
+  assert.deepEqual(first.errors, [])
   assert.equal(first.adapter.requests.length, 3)
+  const toolMessages = first.adapter.requests[2].messages.filter(message => message.role === 'tool')
+  assert.match(toolMessages[0].content[0].text, /^Search completed/)
+  assert.match(toolMessages[1].content[0].text, /^Fetch completed/)
+  assert.doesNotMatch(toolMessages[1].content[0].text, /Evidence/)
+  const events = agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
+  assert.equal(events.length, 2)
+  assert.ok(events.every(event => event.surfaceOp === 'append'))
+  assert.match(events[1].data.meta.content, /Evidence/)
   const before = structuredClone(stateOf(first.ctx, agent))
   assert.equal(before.items.S1.url, url)
   assert.match(before.items.S1.fetched.content, /Evidence\./)
@@ -78,7 +95,7 @@ test('real web tools feed projection, survive JSONL resume, and leave model cont
   closed = true
   const resumed = await setup(join(root, 'enabled'))
   t.after(() => resumed.ctx.fiber.dispose())
-  const restored = (await resumed.ctx.agents.resume({ resumeSessionId: SessionId('research') })).agent
+  const restored = (await resumed.ctx.agents.resume({ resumeSessionId: SessionId('research'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
   assert.deepEqual(stateOf(resumed.ctx, restored), before)
   assert.equal(resumed.adapter.requests.length, 0)
 
@@ -97,4 +114,15 @@ test('real web tools feed projection, survive JSONL resume, and leave model cont
   await control.ctx.plugin(Materials)
   assert.equal(stateOf(control.ctx, controlAgent).nextHandle, 2)
   assert.deepEqual(stateOf(resumed.ctx, restored), before)
+  restored.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+  await restored.whenIdle()
+  assert.deepEqual(resumed.errors, [])
+  assert.equal(resumed.adapter.requests.length, 3)
+  const after = stateOf(resumed.ctx, restored)
+  assert.deepEqual(after.urlIndex, before.urlIndex)
+  assert.equal(after.nextHandle, before.nextHandle)
+  assert.equal(after.items.S1.fetched.content, before.items.S1.fetched.content)
+  const resumedResults = restored.session.snapshotEvents().filter(event => event.type === 'tool/result')
+  assert.match(resumedResults.at(-1).data.message.content[0].text, /^Fetch completed/)
+  assert.equal(resumedResults.at(-1).data.meta.content, before.items.S1.fetched.content)
 })

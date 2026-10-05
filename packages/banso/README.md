@@ -4,7 +4,7 @@
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。基础包配置不变。
 
-同时加载 [会话资料插件](../materials/README.md)，从现有网页工具日志维护可恢复的资料集合。资料暂不注入模型上下文，工具参数不变。
+同时加载 [会话资料插件](../materials/README.md)，从现有网页工具日志维护可恢复的资料集合。资料暂不注入模型上下文，工具参数不变。另加载 [网页工具输出包装](../tool-web/README.md)，search／fetch 向模型返回简短回执，fetch 正文保存到 metadata 供资料投影读取。
 
 ## 安装与构建
 
@@ -16,7 +16,7 @@ pnpm typecheck
 pnpm build
 ```
 
-构建会编译 Tavily、提示词和资料插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
+构建会编译 Tavily、提示词、网页工具输出包装和资料插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
 
 ## 创建与运行 profile
 

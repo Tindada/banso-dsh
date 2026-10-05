@@ -25,6 +25,7 @@ const searchMetaSchema = z.object({
 })
 
 const fetchMetaSchema = z.object({
+  content: z.string(),
   url: urlSchema,
   statusCode: z.number().int(),
   truncated: z.boolean(),
@@ -181,7 +182,7 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
       upsert(next, url, item => ({
         ...item,
         fetched: {
-          content: text,
+          content: parsed.data.content,
           finalUrl: parsed.data.url,
           statusCode,
           truncated,

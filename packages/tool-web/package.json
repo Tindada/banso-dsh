@@ -1,7 +1,7 @@
 {
-  "name": "banso-dsh-materials",
+  "name": "banso-dsh-tool-web",
   "version": "0.1.0",
-  "description": "Session-local research materials derived from web tool events",
+  "description": "Agent-scoped compact outputs for native DSH web tools",
   "type": "module",
   "license": "ISC",
   "main": "./lib/index.js",
@@ -23,8 +23,9 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2"
+    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tool-web": "0.2.0-rc.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
@@ -38,12 +39,6 @@
     "@types/node": "^24.19.0",
     "typescript": "^7.0.2",
     "@deepseek-ai/dsh-web": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-tool-web": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.0-rc.2",
-    "banso-dsh-tool-web": "workspace:*",
-    "@deepseek-ai/dsh-invariants": "0.2.0-rc.2"
-  },
-  "dependencies": {
-    "zod": "^4.4.3"
+    "@deepseek-ai/dsh-tool-web": "0.2.0-rc.2"
   }
 }

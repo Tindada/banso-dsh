@@ -20,14 +20,14 @@ function fixture() {
   const call = (name = 'web_search', args = { queries: ['q'] }, turn = 1) => emit({ type: 'tool/call', data: { name, arguments: JSON.stringify(args), callId: `c${seq}`, turn, step: 1 } })
   const result = (call, meta, options = {}) => emit({ type: 'tool/result', surfaceOp: 'append', sourceEventSeqs: [call.seq], data: {
     turn: call.data.turn, step: 1,
-    message: { role: 'tool', toolCallId: call.data.callId, content: [{ type: 'text', text: options.text ?? 'Fetched body' }], isError: options.isError ?? false },
+    message: { role: 'tool', toolCallId: call.data.callId, content: [{ type: 'text', text: options.text ?? 'Fetch completed.' }], isError: options.isError ?? false },
     ...(meta === undefined ? {} : { meta }),
     ...(options.error ? { error: { name: 'Error', code: 'FETCH_FAILED', reason: options.error } } : {}),
   }, ...options.event })
   return { emit, call, result, events, get state() { return state } }
 }
 const search = sources => ({ sources, truncated: false })
-const fetch = (url = A, statusCode = 200, truncated = false) => ({ url, statusCode, truncated })
+const fetch = (url = A, statusCode = 200, truncated = false, content = 'Fetched body') => ({ url, statusCode, truncated, content })
 
 test('search deduplicates exact URLs, retains absent fields and fetched content across turns', () => {
   const f = fixture()
@@ -47,7 +47,7 @@ test('search deduplicates exact URLs, retains absent fields and fetched content 
 
 test('direct fetch creates material; redirects stay separate; failures retain successful content', () => {
   const f = fixture()
-  f.result(f.call('web_fetch', { url: A }), fetch(B), { text: 'Header\nBody\nNotice' })
+  f.result(f.call('web_fetch', { url: A }), fetch(B, 200, false, 'Header\nBody\nNotice'))
   const saved = f.state.items.S1.fetched
   assert.equal(saved.finalUrl, B)
   assert.equal(saved.content, 'Header\nBody\nNotice')
@@ -59,7 +59,7 @@ test('direct fetch creates material; redirects stay separate; failures retain su
   f.result(f.call('web_fetch', { url: A }), undefined, { isError: true, error: 'timeout' })
   assert.deepEqual(f.state.items.S1.fetched, saved)
   assert.equal(f.state.items.S1.lastFetch.error, 'timeout')
-  f.result(f.call('web_fetch', { url: A }), fetch(), { text: 'New body' })
+  f.result(f.call('web_fetch', { url: A }), fetch(A, 200, false, 'New body'))
   assert.equal(f.state.items.S1.fetched.content, 'New body')
   assert.equal(f.state.items.S1.lastFetch.status, 'success')
 })
@@ -71,8 +71,8 @@ test('correlates out-of-order results by source seq and call id; cleans incomple
   const before = f.state
   f.result(a, fetch(), { event: { sourceEventSeqs: [999] } })
   assert.equal(f.state, before)
-  f.result(b, fetch(B), { text: 'B' })
-  f.result(a, fetch(A), { text: 'A' })
+  f.result(b, fetch(B, 200, false, 'B'))
+  f.result(a, fetch(A, 200, false, 'A'))
   assert.equal(f.state.items.S1.url, B)
   assert.equal(f.state.items.S2.url, A)
   const pending = f.call()
@@ -110,4 +110,21 @@ test('separate initial states never share containers or handles', () => {
   b.result(b.call(), search([{ url: B }]))
   assert.equal(a.state.items.S1.url, A)
   assert.equal(b.state.items.S1.url, B)
+})
+
+
+test('fetch accepts only metadata content, never a receipt as body; state version stays unchanged', () => {
+  const f = fixture()
+  for (const meta of [
+    { url: A, statusCode: 200, truncated: false },
+    { url: A, statusCode: 200, truncated: false, content: 42 },
+  ]) {
+    f.result(f.call('web_fetch', { url: A }), meta, { text: 'Must not become saved content' })
+    assert.deepEqual(f.state.items, {})
+  }
+  f.result(f.call('web_fetch', { url: A }), fetch(A, 200, false, 'Metadata body'), { text: 'Short receipt' })
+  assert.equal(f.state.items.S1.fetched.content, 'Metadata body')
+  f.result(f.call('web_fetch', { url: A }), { url: A, statusCode: 200, truncated: false, content: null })
+  assert.equal(f.state.items.S1.fetched.content, 'Metadata body')
+  assert.equal(materialsProjection.stateVersion, 1)
 })

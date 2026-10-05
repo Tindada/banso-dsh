@@ -30,3 +30,6 @@
       config:
         search: true
         fetch: true
+
+    - id: banso-tool-web
+      name: banso-dsh-tool-web
