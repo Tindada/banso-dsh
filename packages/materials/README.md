@@ -1,6 +1,6 @@
-# 会话资料投影
+# 会话资料与上下文快照
 
-`banso-dsh-materials` 注册 host-only 的 `bansoMaterials` projection，依赖 `sessionProjections`。从 `web_search`、`web_fetch` 的既有事件归纳资料，配合 `banso-dsh-tool-web` 的输出协议使用。不写入自定义事件，也不注入模型上下文。
+`banso-dsh-materials` 注册 host-only 的 `bansoMaterials` projection，依赖 `sessionProjections` 和 `agents`。从 `web_search`、`web_fetch` 的既有事件归纳资料，配合 `banso-dsh-tool-web` 的输出协议使用。不写入自定义事件；在每步进入模型请求前呈现最新资料快照。
 
 ## 读取与结构
 
@@ -33,7 +33,17 @@ const material = state?.items.S1
 
 结构化 meta 基于当前 DSH `0.2.0-rc.2` 网页工具协议，fetch 由本项目输出包装增加必需的 `content` 字段，升级时需重新验证。只支持直接的原生网页工具调用，不保证同名第三方工具或嵌套复合传输兼容。fetch 文本可能已截断，无法恢复未保存的网页内容。
 
-本版 handle 仅供程序使用，未接入工具参数、最终引用或 prompt；没有证据提取和长期资料库。
+本版 handle 会呈现在资料快照中，但未接入工具参数或最终引用解析；没有证据提取和长期资料库。
+
+## 模型上下文
+
+`agent/pre-step` 中间件等待后续决策；允许进入 step 时，将资料组织成快照，追加到 `decision.messages` 末尾，由默认 loop 提交。资料按 handle 数字排序，保留搜索字段、抓取状态、UTC 时间与全部已保存正文。新增标签和说明用英文，外部资料保持原文。最近抓取失败时，明确标记仍保留的是此前成功内容。
+
+没有资料时不插入，内容不变时不重复追加或移动；资料变化时，通过标准 `user/message` 替换旧快照为简短占位，再追加最新快照。工具调用和短回执保持原状；参考时间仍独立使用 prompt 插件的 runtime context。
+
+消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。另注册 host-only `bansoMaterialsSnapshot` 投影，仅保存最新快照的 `{ messageId, seq }` 或 `null`，不复制正文。使用时结合当前 surface 和派生消息确认快照仍有效；若被其他操作覆盖，下步重新插入。定位记录同样支持 JSONL 重放、后加载和卸载重载。生产代码不读取已弃用的任意历史事件接口。
+
+JSONL 保存旧完整快照及替换记录；模型当前可见 surface 保留一份最新完整快照和旧占位。卸载插件停止后续更新，不撤销已经写入的消息。正文、占位及历史日志均可能随会话增长，暂不提供摘要、筛选、二次裁剪或总量控制。
 
 ## 验证
 
@@ -43,4 +53,4 @@ pnpm typecheck
 pnpm build
 ```
 
-测试覆盖更新、失败、调用关联、隔离和确定性重放，并使用真实默认 loop、网页工具及 JSONL 后端，配合模拟模型/provider，验证恢复、恢复后继续调用、后注册和卸载重载；工具包装提供短回执和 metadata 正文，资料投影本身不再改变模型消息。不访问在线模型或搜索服务。
+测试覆盖更新、失败、调用关联、隔离和确定性重放，并使用真实默认 loop、网页工具及 JSONL 后端，配合模拟模型/provider，验证恢复、恢复后继续调用、后注册和卸载重载；工具包装提供短回执和 metadata 正文，资料投影继续只维护状态，新增 pre-step 呈现会改变模型可见消息。另验证快照替换、跨轮去重、重试、拒绝进入 step、外部覆盖、会话隔离与参考时间共存。不访问在线模型或搜索服务。

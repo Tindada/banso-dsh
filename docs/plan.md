@@ -23,9 +23,11 @@
 
 本次（2026-10-04）完成 workspace 类型检查、构建、使用 DSH 官方 patch 合成函数检查 bundle 配置，以及 4 项模拟模型集成测试，覆盖首步时间、同轮补充消息、工具调用、重试、跨轮更新、agent 隔离和插件卸载重载。未调用在线服务；下一步用真实研究问题检查提示词效果，再决定需要补充的业务能力。
 
-已新增 `banso-dsh-materials`：从现有 `tool/call`、`tool/result` 维护会话资料投影，保存搜索元数据、成功抓取文本与最近抓取状态，并分配稳定 handle。通过真实网页工具、模拟 provider 和 JSONL 后端验证恢复前后资料一致；本次共 6 项资料测试，不调用在线服务。资料尚未进入模型上下文，现有工具仍使用 URL。详见 [资料插件说明](../packages/materials/README.md)。
+已新增 `banso-dsh-materials`：从现有 `tool/call`、`tool/result` 维护会话资料投影，保存搜索元数据、成功抓取文本与最近抓取状态，并分配稳定 handle。通过真实网页工具、模拟 provider 和 JSONL 后端验证恢复前后资料一致；本次共 6 项资料测试，不调用在线服务。此阶段仅维护资料；后续快照呈现进度见下文。现有工具仍使用 URL。详见 [资料插件说明](../packages/materials/README.md)。
 
 2026-10-05：新增 `banso-dsh-tool-web`，通过 agent scope 同名覆盖复用原生网页工具，只调整输出。search 保留简短回执及可选 answer；fetch 将原格式化文本放入 metadata 的必需 `content` 字段，模型收到状态回执。资料投影只从此字段读取正文，状态结构、handle 分配及 `stateVersion: 1` 保持不变。本次未实现材料 context 或 surface 替换。模拟 provider 测试覆盖局部覆盖、工具可见性、晚加载、卸载重载与新协议 JSONL 恢复后继续运行；不调用在线服务。详见 [输出包装说明](../packages/tool-web/README.md)。
+
+2026-10-05：在 `banso-dsh-materials` 内接入材料上下文快照。pre-step 在资料变化时将旧快照替换为英文占位，并由默认 loop 在本步末尾提交完整新快照；外部内容保持原文。独立 host-only 定位投影只保存消息 ID 和事件 seq，资料结构与原投影版本不变。工具短回执和参考时间独立保留；不提供正文总量控制或旧格式迁移。使用模拟模型/provider 验证真实 loop、JSONL 恢复与继续运行、重试、拒绝进入 step、外部覆盖及插件重载，不调用在线服务。
 
 当前研究规则仍依赖模型遵循，尚无独立证据库、正文证据隔离、业务预算和引用语义校验。参考时间状态按 agent 保存在内存中；恢复后的下一轮重新生成，不保证研究中途热重载恢复原时间。详见 [提示词插件说明](../packages/prompt/README.md)。
 
