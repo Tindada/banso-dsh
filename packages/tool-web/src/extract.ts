@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { BlockAssembler } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 
 export interface ExtractionConfig {
@@ -32,6 +32,7 @@ export async function extractEvidence(
   for await (const chunk of ctx.llm.stream({
     provider: route.provider,
     model: route.model,
+    reasoningEffort: ReasoningEffortId('off'),
     system: SYSTEM,
     messages: [{ role: 'user', content: [{ type: 'text', text: framed }] }],
     maxTokens: config.maxOutputTokens,

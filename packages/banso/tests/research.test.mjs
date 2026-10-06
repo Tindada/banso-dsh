@@ -31,7 +31,9 @@ class Adapter extends LlmAdapter {
   targets = [url]
   focus = 'facts'
   extractions = []
-  async resolveModel(provider, model) { return { provider, id: model, name: model } }
+  async resolveModel(provider, model) {
+    return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } }
+  }
   async *stream(request) {
     if (request.system !== undefined) {
       this.extractions.push(request)

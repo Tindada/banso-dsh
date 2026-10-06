@@ -18,8 +18,10 @@
 | --- | --- | --- |
 | `provider`、`model` | 当前 session 最新请求的模型路由 | 必须成对覆盖；没有路由时提取失败 |
 | `maxInputBytes` | 200,000 | 提取系统提示词与序列化输入的 UTF-8 字节上限，超限报错而不截取 |
-| `maxOutputTokens` | 2,048 | 提取输出上限；达到上限不保存残缺证据 |
+| `maxOutputTokens` | 4,096 | 提取输出上限；达到上限不保存残缺证据 |
 | `timeoutMs` | 120,000 | read 整体超时，单位毫秒 |
+
+提取请求显式使用 `reasoningEffort: off`，不继承主对话的思考配置。
 
 Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超时。单独组合本插件时也需加载该策略；仅声明 `timeoutMs` 不会启动计时器。抓取和提取都转发执行取消信号。
 

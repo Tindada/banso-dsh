@@ -19,7 +19,9 @@ class Adapter extends LlmAdapter {
   text = '{"text":"Compact evidence."}'
   finish = { kind: 'stop' }
   action
-  async resolveModel(provider, model) { return { provider, id: model, name: model } }
+  async resolveModel(provider, model) {
+    return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } }
+  }
   async *stream(request) {
     this.requests.push(request)
     await this.action?.(request)
@@ -86,7 +88,8 @@ test('read has its own schema and timeout; compact receipts, full metadata and i
   assert.equal(result.meta.evidence, 'Compact evidence.')
   const request = h.adapter.requests[0]
   assert.equal(request.model, 'extract')
-  assert.equal(request.maxTokens, 2048)
+  assert.equal(request.reasoningEffort, 'off')
+  assert.equal(request.maxTokens, 4096)
   assert.equal(request.tools, undefined)
   assert.equal(request.messages.length, 1)
   const input = JSON.parse(textOf(request.messages[0]))

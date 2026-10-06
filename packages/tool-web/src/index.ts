@@ -16,7 +16,7 @@ export const Config: z<Config> = z.object({
   provider: z.string(),
   model: z.string(),
   maxInputBytes: z.number().step(1).min(1).default(200_000),
-  maxOutputTokens: z.number().step(1).min(1).default(2_048),
+  maxOutputTokens: z.number().step(1).min(1).default(4_096),
   timeoutMs: z.number().step(1).min(1).max(2_147_483_647).default(120_000),
 })
 
