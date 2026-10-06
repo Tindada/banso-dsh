@@ -18,7 +18,7 @@ export function renderMaterials(state: MaterialsState): string | undefined {
   for (const item of items) {
     const lines = [`Material: ${item.handle}`, `URL: ${item.url}`]
     if (item.title !== undefined) lines.push(`Title: ${item.title}`)
-    if (item.snippet !== undefined) lines.push(`Search snippet: ${item.snippet}`)
+    if (item.fetched === undefined && item.snippet !== undefined) lines.push(`Search snippet: ${item.snippet}`)
     if (item.publishedAt !== undefined) lines.push(`Published at: ${item.publishedAt}`)
     if (item.lastFetch !== undefined) {
       const attempt = item.lastFetch

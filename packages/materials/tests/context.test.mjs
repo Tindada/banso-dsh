@@ -78,7 +78,8 @@ test('rendering is deterministic, numerically ordered and preserves external tex
   const rendered = renderMaterials(state)
   assert.ok(rendered.indexOf('Material: S1\n') < rendered.indexOf('Material: S2\n'))
   assert.ok(rendered.indexOf('Material: S2\n') < rendered.indexOf('Material: S10\n'))
-  for (const text of ['中文标题', '中文摘要', '2026-10-05', state.items.S1.fetched.content, 'Previously successful content', 'Latest fetch attempt: failed', '503', 'Truncated: true', '1970-01-01T00:00:00.000Z', url + '/redirect']) assert.ok(rendered.includes(text))
+  for (const text of ['中文标题', '2026-10-05', state.items.S1.fetched.content, 'Previously successful content', 'Latest fetch attempt: failed', '503', 'Truncated: true', '1970-01-01T00:00:00.000Z', url + '/redirect']) assert.ok(rendered.includes(text))
+  assert.ok(!rendered.includes('中文摘要'))
   state.pendingCalls.x = { name: 'web_search', callId: 'x', turn: 1 }
   assert.equal(renderMaterials(state), rendered)
   delete state.pendingCalls.x

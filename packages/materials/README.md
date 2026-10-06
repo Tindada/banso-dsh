@@ -39,6 +39,8 @@ const material = state?.items.S1
 
 `agent/pre-step` 中间件等待后续决策；允许进入 step 时，将资料组织成快照，追加到 `decision.messages` 末尾，由默认 loop 提交。资料按 handle 数字排序，保留搜索字段、抓取状态、UTC 时间与全部已保存正文。新增标签和说明用英文，外部资料保持原文。最近抓取失败时，明确标记仍保留的是此前成功内容。
 
+已有成功抓取内容的条目不再展示搜索 snippet（即使正文已截断或最近一次重抓失败）；尚无成功抓取内容时仍展示 snippet。底层资料保留 snippet，仅调整快照展示。
+
 没有资料时不插入，内容不变时不重复追加或移动；资料变化时，通过标准 `user/message` 替换旧快照为简短占位，再追加最新快照。工具调用和短回执保持原状；参考时间仍独立使用 prompt 插件的 runtime context。
 
 消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。另注册 host-only `bansoMaterialsSnapshot` 投影，仅保存最新快照的 `{ messageId, seq }` 或 `null`，不复制正文。使用时结合当前 surface 和派生消息确认快照仍有效；若被其他操作覆盖，下步重新插入。定位记录同样支持 JSONL 重放、后加载和卸载重载。生产代码不读取已弃用的任意历史事件接口。
