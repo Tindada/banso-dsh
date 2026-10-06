@@ -17,10 +17,13 @@
       name: '@deepseek-ai/dsh-web'
       config:
         searchProvider: tavily
-        fetchProvider: http
+        fetchProvider: jina
 
     - id: web-search-tavily
       name: banso-dsh-web-search-tavily
+
+    - id: web-fetch-jina
+      name: banso-dsh-web-fetch-jina
 
     - id: web-fetch-http
       name: '@deepseek-ai/dsh-web-fetch-http'

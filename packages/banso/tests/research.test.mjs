@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { once } from 'node:events'
+import * as Jina from 'banso-dsh-web-fetch-jina'
 import { test } from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,7 +50,7 @@ class Adapter extends LlmAdapter {
     }
   }
 }
-async function setup(root, enabled = true, fetchProvider) {
+async function setup(root, enabled = true, fetchProvider, jinaConfig) {
   const ctx = new Context()
   const errors = []
   ctx.on('agent/error', ({ error }) => errors.push(error))
@@ -56,7 +59,7 @@ async function setup(root, enabled = true, fetchProvider) {
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(BansoPrompt)
   for (const plugin of [Invariants, SessionInvariant, LoopInvariant]) await ctx.plugin(plugin)
-  await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: 'fixture' })
+  await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: jinaConfig ? 'jina' : 'fixture' })
   ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search() {
     return { sources: [{ url, title: 'Article', snippet: 'Preview' }], truncated: false }
   } })
@@ -64,6 +67,7 @@ async function setup(root, enabled = true, fetchProvider) {
     if (fetchProvider) return fetchProvider(request, signal)
     return { url: url + '/final', statusCode: 200, body: { kind: 'html', content: '<h1>Article</h1><p>Evidence.</p>' }, truncated: false }
   } })
+  if (jinaConfig) await ctx.plugin(Jina, jinaConfig)
   await ctx.plugin(WebTools)
   await ctx.plugin(WrappedTools)
   if (enabled) await ctx.plugin(Materials)
@@ -218,4 +222,39 @@ test('single handle and URL calls overlap in the default loop and restore new ha
   assert.equal(stateOf(resumed.ctx, restored).nextHandle, 3)
   const last = restored.session.snapshotEvents().filter(event => event.type === 'tool/result').at(-1)
   assert.equal(last.data.meta.requestUrl, second)
+})
+
+
+test('Jina Markdown flows through handle fetch, metadata and the material snapshot', async t => {
+  const requests = []
+  const markdown = '# Reader article\n\n**Extracted evidence.**'
+  const server = createServer((req, res) => {
+    requests.push(req.url)
+    res.end(JSON.stringify({ code: 200, status: 20000, data: { url: url + '/final', content: markdown } }))
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve) }))
+  const root = await mkdtemp(join(tmpdir(), 'banso-jina-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const { ctx, adapter, errors } = await setup(root, true, undefined, {
+    baseURL: `http://127.0.0.1:${server.address().port}`, apiKey: '',
+  })
+  t.after(() => ctx.fiber.dispose())
+  adapter.targets = ['S1']
+  const { agent } = await ctx.agents.create({ sessionId: SessionId('jina'), agentOptions: { provider: 'mock', model: 'mock' } })
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
+  await agent.whenIdle()
+  assert.deepEqual(errors, [])
+  assert.deepEqual(requests, [`/${url}`])
+  const result = agent.session.snapshotEvents().filter(event => event.type === 'tool/result').at(-1)
+  assert.match(textOf(result.data.message), /S1.*Fetch completed.*HTTP 200/)
+  assert.ok(!textOf(result.data.message).includes(markdown))
+  assert.equal(result.data.meta.requestUrl, url)
+  assert.equal(result.data.meta.url, url + '/final')
+  assert.ok(result.data.meta.content.includes(markdown))
+  assert.equal(stateOf(ctx, agent).items.S1.fetched.content, result.data.meta.content)
+  const snapshot = textOf(snapshots(adapter.requests.at(-1))[0])
+  assert.ok(snapshot.includes(markdown))
+  assert.doesNotMatch(snapshot, /Search snippet: Preview/)
 })

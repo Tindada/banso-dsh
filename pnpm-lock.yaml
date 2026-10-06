@@ -191,6 +191,9 @@ importers:
       banso-dsh-tool-web:
         specifier: workspace:*
         version: link:../tool-web
+      banso-dsh-web-fetch-jina:
+        specifier: workspace:*
+        version: link:../web-fetch-jina
       banso-dsh-web-search-tavily:
         specifier: workspace:*
         version: link:../web-search-tavily
@@ -385,6 +388,28 @@ importers:
       banso-dsh-materials:
         specifier: workspace:*
         version: link:../materials
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/web-fetch-jina:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: ^3.18.4
+        version: 3.18.4
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.4
+        version: 4.0.4(@deepseek-ai/cordis-plugin-loader@1.0.5)
+      '@deepseek-ai/dsh-launch-environment':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
+      '@deepseek-ai/dsh-web':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-llm@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4))
+      '@types/node':
+        specifier: ^24.19.0
+        version: 24.19.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

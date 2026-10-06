@@ -1,6 +1,6 @@
 # Banso 业务 bundle
 
-`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、HTTP Fetch 和 [Banso 提示词插件](../prompt/README.md)，向 agent 提供 `web_search`、`web_fetch`、研究规则和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取 和 [Banso 提示词插件](../prompt/README.md)，向 agent 提供 `web_search`、`web_fetch`、研究规则和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。基础包配置不变。
 
@@ -16,7 +16,7 @@ pnpm typecheck
 pnpm build
 ```
 
-构建会编译 Tavily、提示词、网页工具输出包装和资料插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
+构建会编译 Tavily、Jina、提示词、网页工具输出包装和资料插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
 
 ## 创建与运行 profile
 
@@ -29,7 +29,7 @@ pnpm dsh --profile banso-dsh --dump-config
 pnpm dsh --profile banso-dsh
 ```
 
-运行环境需提供 `DEEPSEEK_API_KEY` 和 `TAVILY_API_KEY`。搜索配置见 [Tavily provider](../web-search-tavily/README.md)。
+运行环境需提供 `DEEPSEEK_API_KEY` 和 `TAVILY_API_KEY`。搜索配置见 [Tavily provider](../web-search-tavily/README.md)。抓取默认使用 [Jina Reader](../web-fetch-jina/README.md)，可选提供 `JINA_API_KEY`，未提供时匿名调用。原生 HTTP provider 仍保留，将 web 插件的 `fetchProvider` 设为 `http` 可切回。
 
 启动后提供 SDK stdio JSON-RPC 服务，没有聊天界面。Python SDK 客户端选择 `banso-dsh`；若由客户端启动 DSH，无需提前启动服务。
 
@@ -46,5 +46,7 @@ pnpm --filter banso-dsh test
 ```
 
 `tests/research.test.mjs` 手动加载真实插件，使用模拟模型和网页 provider、默认 loop 与 JSONL 后端，验证工具输出、资料快照、handle 寻址、并发抓取、恢复后继续调用及参考时间共存。
+
+另使用真实 Jina provider 与本地 HTTP 模拟服务，验证 handle 抓取、Markdown metadata 与资料快照。
 
 测试不经过 bundle 配置和 SDK 启动入口，不调用在线服务；通过这些测试不代表真实服务端请求或研究质量已经验证。功能包各自维护投影、展示和生命周期测试。

@@ -7,7 +7,7 @@
 依赖对齐 DSH `0.2.0-rc.2`，使用 pnpm workspace：
 
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
-- `web-search-tavily` 提供搜索，网页抓取复用 DSH HTTP Fetch。
+- `web-search-tavily` 提供搜索，网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，保留 DSH HTTP Fetch，可通过 `fetchProvider: http` 切回。
 - `prompt` 提供研究规则和每轮固定的 UTC 参考时间。用户通过消息指定历史日期或研究范围。参考时间按 agent 保存在内存中，恢复后的下一轮重新生成，研究中途热重载不保证保留原时间。
 - `tool-web` 在 agent scope 包装原生网页工具。`web_fetch` 使用单个 `target` 接受 handle 或完整 HTTP(S) URL，多页沿用默认 loop 的工具并发。工具返回短回执，fetch metadata 保存请求地址 `requestUrl`、最终地址和格式化全文。
 - `materials` 从工具日志维护会话资料、稳定 handle 和抓取状态；失败保留此前成功正文。每步呈现最新资料快照，旧快照替换为占位；已有成功正文时隐藏 snippet，底层仍保留。资料支持 JSONL 恢复和插件重载。
@@ -18,13 +18,13 @@
 
 ## 验证范围
 
-workspace 构建、类型检查及 24 项本地测试已通过。功能包验证各自行为及框架集成；banso 组合测试手动加载真实插件，使用模拟模型和网页 provider、默认 loop 与 JSONL 后端，覆盖工具输出、资料快照、并发抓取、恢复后继续调用及参考时间共存。测试不调用在线服务，也不经过 bundle 配置或 SDK 启动入口。
+workspace 构建、类型检查及 34 项本地测试已通过。功能包验证各自行为及框架集成；banso 组合测试手动加载真实插件，使用模拟模型和网页 provider、默认 loop 与 JSONL 后端，覆盖工具输出、资料快照、并发抓取、恢复后继续调用及参考时间共存。Jina provider 使用本地 HTTP 服务验证请求、错误、截断、取消与生命周期，并在 banso 组合层验证 Markdown 经 handle 抓取写入资料。测试不调用在线服务，也不经过 bundle 配置或 SDK 启动入口。
 
-早期版本已人工验证配置合成、Python SDK 调用和搜索／阅读。当前 handle 版本在 SDK 试跑中发现的参数 schema 错误已修复并增加回归断言，修复后的在线复测尚待确认。真实研究质量、npm CLI 安装版和发布包兼容性尚未验证。
+早期版本已人工验证配置合成、Python SDK 调用和搜索／阅读。当前 handle 版本在 SDK 试跑中发现的参数 schema 错误已修复并增加回归断言，修复后的 HTTP provider 版本已检查 SDK 实际运行日志，搜索、handle／URL 抓取和资料快照流程符合预期；Jina 在线抓取尚未实测。真实研究质量、npm CLI 安装版和发布包兼容性尚未验证。
 
 ## 下一步
 
-1. 通过 SDK 复测当前 handle 版本，验证真实模型的搜索、抓取和后续回答。
+1. 通过 SDK 实测 Jina provider，检查真实页面提取质量和后续回答。
 2. 完善独立证据提取方案，围绕 `handles`、`focus` 和追问时的增量证据确定协议，再实现。
 3. 用原项目的典型研究任务检查时间范围、来源、证据、引用和结束行为。
 

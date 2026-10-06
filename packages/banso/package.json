@@ -19,7 +19,8 @@
     "banso-dsh-web-search-tavily": "workspace:*",
     "banso-dsh-prompt": "workspace:*",
     "banso-dsh-materials": "workspace:*",
-    "banso-dsh-tool-web": "workspace:*"
+    "banso-dsh-tool-web": "workspace:*",
+    "banso-dsh-web-fetch-jina": "workspace:*"
   },
   "files": [
     "base.patch.yml",
