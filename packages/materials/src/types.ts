@@ -27,7 +27,7 @@ export interface PendingCall {
   name: 'web_search' | 'web_fetch'
   callId: string
   turn: number
-  url?: string | undefined
+  target?: string | undefined
 }
 
 /** JSON-only replay state. Treat all values read through stateOf as read-only. */

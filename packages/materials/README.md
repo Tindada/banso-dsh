@@ -19,7 +19,9 @@ const material = state?.items.S1
 
 ## 更新规则
 
-搜索按 URL 精确去重，保留已有 handle，仅覆盖本次提供的字段，不清除抓取内容。首次直接抓取的 URL 也能创建资料。重定向只记录最终 URL，不合并来源。工具无错误、metadata 校验通过且 HTTP 为 2xx 才更新成功内容；非 2xx 或工具执行错误记录失败。fetch metadata 的 `content` 缺失或类型错误时不导入，不从 `message.content` 读取正文。
+- 搜索更新：按 URL 精确去重，复用 handle，仅覆盖本次提供的字段，保留已有抓取内容。
+- 抓取成功：按 metadata 的 `requestUrl` 更新或创建资料，`url` 保存最终地址，重定向不合并条目。metadata 校验通过且 HTTP 为 2xx 时保存 `content`，不从短回执提取正文。
+- 抓取失败：非 2xx 按 `requestUrl` 更新失败状态；工具执行错误时，按调用记录中的原始 `target` 处理——合法 URL 更新或创建条目，已有 handle 更新对应条目，未知或无效目标不创建资料。失败均保留此前成功正文。
 
 结果须通过 `sourceEventSeqs` 关联已识别调用并匹配 callId、turn。无关工具、无法关联或 metadata 格式不符的结果不导入，不从展示文本猜测字段。仅原始追加的工具结果参与资料更新，surface 替换不覆盖资料；因此资料保留的是曾经获得的内容，而非当前 surface 的镜像。
 
@@ -27,13 +29,13 @@ const material = state?.items.S1
 
 ## 恢复与兼容边界
 
-投影状态由内存承载，来源是持久化的既有工具事件。JSONL 恢复、插件后加载和重载均可重建；未新增 session 格式或事件类型，初始投影版本为 1。不另配投影检查点缓存。
+投影状态由内存承载，来源是持久化的既有工具事件。JSONL 恢复、插件后加载和重载均可重建；未新增 session 格式或事件类型，投影版本保持 1。当前仍在首版开发，不保留旧 fetch 参数／metadata 的兼容分支，不做状态迁移。不另配投影检查点缓存。
 
 这是从工具事实累计派生的索引，与 DSH 推荐的整份业务状态事件模式不同。纯同步 fold 不访问网络、不读取时钟；JSONL 恢复测试验证了这一用法。
 
-结构化 meta 基于当前 DSH `0.2.0-rc.2` 网页工具协议，fetch 由本项目输出包装增加必需的 `content` 字段，升级时需重新验证。只支持直接的原生网页工具调用，不保证同名第三方工具或嵌套复合传输兼容。fetch 文本可能已截断，无法恢复未保存的网页内容。
+结构化 meta 基于当前 DSH `0.2.0-rc.2` 网页工具协议，fetch 由本项目包装提供必需的 `requestUrl` 和 `content` 字段，升级时需重新验证。只支持直接的原生网页工具调用，不保证同名第三方工具或嵌套复合传输兼容。fetch 文本可能已截断，无法恢复未保存的网页内容。
 
-本版 handle 会呈现在资料快照中，但未接入工具参数或最终引用解析；没有证据提取和长期资料库。
+本版 handle 可用于 `web_fetch` 的单个 `target` 参数；尚未接入最终引用解析，没有证据提取和长期资料库。
 
 ## 模型上下文
 
@@ -43,7 +45,7 @@ const material = state?.items.S1
 
 没有资料时不插入，内容不变时不重复追加或移动；资料变化时，通过标准 `user/message` 替换旧快照为简短占位，再追加最新快照。工具调用和短回执保持原状；参考时间仍独立使用 prompt 插件的 runtime context。
 
-消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。另注册 host-only `bansoMaterialsSnapshot` 投影，仅保存最新快照的 `{ messageId, seq }` 或 `null`，不复制正文。使用时结合当前 surface 和派生消息确认快照仍有效；若被其他操作覆盖，下步重新插入。定位记录同样支持 JSONL 重放、后加载和卸载重载。生产代码不读取已弃用的任意历史事件接口。
+消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。另注册 host-only `bansoMaterialsSnapshot` 投影，仅保存最新快照的 `{ messageId, seq }` 或 `null`，不复制正文。使用时结合当前 surface 和派生消息确认快照仍有效；若被其他操作覆盖，下步重新插入。定位记录同样支持 JSONL 重放、后加载和卸载重载。
 
 JSONL 保存旧完整快照及替换记录；模型当前可见 surface 保留一份最新完整快照和旧占位。卸载插件停止后续更新，不撤销已经写入的消息。正文、占位及历史日志均可能随会话增长，暂不提供摘要、筛选、二次裁剪或总量控制。
 
@@ -51,8 +53,8 @@ JSONL 保存旧完整快照及替换记录；模型当前可见 surface 保留�
 
 ```sh
 pnpm --filter banso-dsh-materials test
-pnpm typecheck
-pnpm build
 ```
 
-测试覆盖更新、失败、调用关联、隔离和确定性重放，并使用真实默认 loop、网页工具及 JSONL 后端，配合模拟模型/provider，验证恢复、恢复后继续调用、后注册和卸载重载；工具包装提供短回执和 metadata 正文，资料投影继续只维护状态，新增 pre-step 呈现会改变模型可见消息。另验证快照替换、跨轮去重、重试、拒绝进入 step、外部覆盖、会话隔离与参考时间共存。不访问在线模型或搜索服务。
+本包测试只验证资料投影和上下文快照：使用模拟工具事件验证更新、失败、调用关联、隔离和确定性重放；配合真实默认 loop 和模拟模型验证快照替换、重试、拒绝进入 step、外部覆盖及插件重载。测试不加载网页工具或网页 provider。
+
+跨包链路及 JSONL 恢复验证见 [Banso 组合层测试](../banso/README.md#组合层测试)。

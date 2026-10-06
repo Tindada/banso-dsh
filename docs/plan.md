@@ -1,38 +1,37 @@
 # 迁移规划
 
-将 Python BansoAgain 的新闻研究流程迁入 DSH，在学习框架的同时保留关键业务语义。当前范围不含本地语料库，优先复用 DSH 已有能力，不逐类照搬 Python 实现。
+将 Python BansoAgain 的新闻研究流程迁入 DSH，在学习框架的同时保留关键业务语义。当前仍处于首版开发，范围不含本地语料库，优先复用 DSH 已有能力。
 
-## 当前进度
+## 当前能力
 
-基础运行与网页能力已接通：
+依赖对齐 DSH `0.2.0-rc.2`，使用 pnpm workspace：
 
-- `packages/base` 提供精简 SDK 环境和默认 agent loop。
-- `packages/web-search-tavily` 提供 Tavily 搜索 provider，网页阅读复用 DSH HTTP Fetch。
-- `packages/banso` 组合基础配置与网页工具；业务 profile 只加载 `banso-dsh`。构建时自动复制基础 patch，源文件只在基础包维护。
-- 依赖对齐 DSH `0.2.0-rc.2`，使用 pnpm workspace。构建与类型检查已通过；用户已确认基础包和完整组合的配置检查、Python SDK 调用，以及新组合的搜索、阅读测试成功。
+- `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
+- `web-search-tavily` 提供搜索，网页抓取复用 DSH HTTP Fetch。
+- `prompt` 提供研究规则和每轮固定的 UTC 参考时间。用户通过消息指定历史日期或研究范围。参考时间按 agent 保存在内存中，恢复后的下一轮重新生成，研究中途热重载不保证保留原时间。
+- `tool-web` 在 agent scope 包装原生网页工具。`web_fetch` 使用单个 `target` 接受 handle 或完整 HTTP(S) URL，多页沿用默认 loop 的工具并发。工具返回短回执，fetch metadata 保存请求地址 `requestUrl`、最终地址和格式化全文。
+- `materials` 从工具日志维护会话资料、稳定 handle 和抓取状态；失败保留此前成功正文。每步呈现最新资料快照，旧快照替换为占位；已有成功正文时隐藏 snippet，底层仍保留。资料支持 JSONL 恢复和插件重载。
 
-上述验证不覆盖全部分支；错误、取消、重试触发、重启恢复及 npm CLI 安装版兼容性尚未单独验证。
+`stateVersion` 保持 `1`，不兼容旧 fetch 参数或 metadata，不做历史状态迁移。当前继续展示全部已保存正文，尚无证据提取、正文总量控制、独立证据库、业务预算或引用语义校验。
 
-## 下一阶段：完整研究流程
+协议与行为详见 [网页工具](../packages/tool-web/README.md)、[资料插件](../packages/materials/README.md) 和 [提示词插件](../packages/prompt/README.md)。
 
-目标：在 DSH 中完成从研究问题、资料收集、证据整理到带引用结果的完整流程。
+## 验证范围
 
-1. **梳理原实现（已完成源码梳理）**：见 [BansoAgain 原实现梳理](banso-original.md)，涵盖入口、决策、动作、状态更新、证据提取、笔记、综合及迁移对照，并区分代码约束、提示词要求与现有局限。本次未运行原项目测试或在线评测。
-2. **首版接入方式（已实现）**：复用默认 loop、web_search 和 web_fetch，新增 `banso-dsh-prompt`，通过 section 提供适配现有能力的研究规则，通过 context 提供每轮固定的 UTC 参考时间。Banso bundle 设置新闻研究 persona 并开启 runtime context；基础包保持通用。不新增 SDK 时间参数，用户指定的历史时间直接通过消息表达。
-3. **实现首个完整版本**：先跑通一条研究流程，再用原项目的典型任务检查时间范围、来源、证据与引用，以及结束行为；按实际需求补齐失败处理等能力。
+workspace 构建、类型检查及 24 项本地测试已通过。功能包验证各自行为及框架集成；banso 组合测试手动加载真实插件，使用模拟模型和网页 provider、默认 loop 与 JSONL 后端，覆盖工具输出、资料快照、并发抓取、恢复后继续调用及参考时间共存。测试不调用在线服务，也不经过 bundle 配置或 SDK 启动入口。
 
-本次（2026-10-04）完成 workspace 类型检查、构建、使用 DSH 官方 patch 合成函数检查 bundle 配置，以及 4 项模拟模型集成测试，覆盖首步时间、同轮补充消息、工具调用、重试、跨轮更新、agent 隔离和插件卸载重载。未调用在线服务；下一步用真实研究问题检查提示词效果，再决定需要补充的业务能力。
+早期版本已人工验证配置合成、Python SDK 调用和搜索／阅读。当前 handle 版本在 SDK 试跑中发现的参数 schema 错误已修复并增加回归断言，修复后的在线复测尚待确认。真实研究质量、npm CLI 安装版和发布包兼容性尚未验证。
 
-已新增 `banso-dsh-materials`：从现有 `tool/call`、`tool/result` 维护会话资料投影，保存搜索元数据、成功抓取文本与最近抓取状态，并分配稳定 handle。通过真实网页工具、模拟 provider 和 JSONL 后端验证恢复前后资料一致；本次共 6 项资料测试，不调用在线服务。此阶段仅维护资料；后续快照呈现进度见下文。现有工具仍使用 URL。详见 [资料插件说明](../packages/materials/README.md)。
+## 下一步
 
-2026-10-05：新增 `banso-dsh-tool-web`，通过 agent scope 同名覆盖复用原生网页工具，只调整输出。search 保留简短回执及可选 answer；fetch 将原格式化文本放入 metadata 的必需 `content` 字段，模型收到状态回执。资料投影只从此字段读取正文，状态结构、handle 分配及 `stateVersion: 1` 保持不变。本次未实现材料 context 或 surface 替换。模拟 provider 测试覆盖局部覆盖、工具可见性、晚加载、卸载重载与新协议 JSONL 恢复后继续运行；不调用在线服务。详见 [输出包装说明](../packages/tool-web/README.md)。
+1. 通过 SDK 复测当前 handle 版本，验证真实模型的搜索、抓取和后续回答。
+2. 完善独立证据提取方案，围绕 `handles`、`focus` 和追问时的增量证据确定协议，再实现。
+3. 用原项目的典型研究任务检查时间范围、来源、证据、引用和结束行为。
 
-2026-10-05：在 `banso-dsh-materials` 内接入材料上下文快照。pre-step 在资料变化时将旧快照替换为英文占位，并由默认 loop 在本步末尾提交完整新快照；外部内容保持原文。独立 host-only 定位投影只保存消息 ID 和事件 seq，资料结构与原投影版本不变。工具短回执和参考时间独立保留；不提供正文总量控制或旧格式迁移。使用模拟模型/provider 验证真实 loop、JSONL 恢复与继续运行、重试、拒绝进入 step、外部覆盖及插件重载，不调用在线服务。
-
-当前研究规则仍依赖模型遵循，尚无独立证据库、正文证据隔离、业务预算和引用语义校验。参考时间状态按 agent 保存在内存中；恢复后的下一轮重新生成，不保证研究中途热重载恢复原时间。详见 [提示词插件说明](../packages/prompt/README.md)。
+[BansoAgain 原实现梳理](banso-original.md) 已完成源码对照，区分代码约束、提示词要求和现有局限；尚未运行原项目测试或在线评测。
 
 ## 暂缓事项
 
-打包发布不作为业务迁移的前置条件。目前使用本地链接，实际 tarball 尚未验证，也未发布。后续发布需检查双 patch 产物、处理基础包的 `private` 标记，并确保基础包和 Tavily provider 的对应版本可安装。
+打包发布不作为业务迁移的前置条件。目前使用本地链接，尚未验证 tarball 或发布。发布前需检查双 patch 产物、基础包的 `private` 标记，以及依赖包的可安装性。
 
 运行步骤见 [基础包说明](../packages/base/README.md) 和 [Banso 使用说明](../packages/banso/README.md)。

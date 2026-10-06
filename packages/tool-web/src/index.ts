@@ -1,10 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-session-projection'
+import type {} from 'banso-dsh-materials'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { wrapWebTool } from './output.js'
 
 export const name = 'banso-tool-web'
-export const inject = ['tools', 'agents']
+export const inject = ['tools', 'agents', 'sessionProjections']
 const names = ['web_search', 'web_fetch'] as const
 
 export function apply(ctx: Context): void {
@@ -34,7 +36,10 @@ export function apply(ctx: Context): void {
           if (original === undefined || ctx.tools.get(name, agent) !== original) continue
           let wrapped = wrappers.get(original)
           if (wrapped === undefined) {
-            wrapped = wrapWebTool(original)
+            wrapped = wrapWebTool(original, (exec, handle) => {
+              if (exec.agent === undefined) return undefined
+              return ctx.sessionProjections.stateOf(exec.agent.session, 'bansoMaterials')?.items[handle]?.url
+            })
             wrappers.set(original, wrapped)
           }
           disposers.push(agent.ctx.tools.register(wrapped))

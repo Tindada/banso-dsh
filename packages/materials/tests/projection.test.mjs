@@ -21,7 +21,7 @@ function fixture() {
   const result = (call, meta, options = {}) => emit({ type: 'tool/result', surfaceOp: 'append', sourceEventSeqs: [call.seq], data: {
     turn: call.data.turn, step: 1,
     message: { role: 'tool', toolCallId: call.data.callId, content: [{ type: 'text', text: options.text ?? 'Fetch completed.' }], isError: options.isError ?? false },
-    ...(meta === undefined ? {} : { meta }),
+    ...(meta === undefined ? {} : { meta: call.data.name === 'web_fetch' ? { requestUrl: JSON.parse(call.data.arguments).target, ...meta } : meta }),
     ...(options.error ? { error: { name: 'Error', code: 'FETCH_FAILED', reason: options.error } } : {}),
   }, ...options.event })
   return { emit, call, result, events, get state() { return state } }
@@ -33,7 +33,7 @@ test('search deduplicates exact URLs, retains absent fields and fetched content 
   const f = fixture()
   f.result(f.call(), search([{ url: A, title: 'First', snippet: 'Summary', publishedAt: '2026-10-04' }, { url: A }, { url: B }]))
   assert.equal(f.state.nextHandle, 3)
-  f.result(f.call('web_fetch', { url: A }), fetch(A, 200, true))
+  f.result(f.call('web_fetch', { target: A }), fetch(A, 200, true))
   const content = f.state.items.S1.fetched
   f.emit({ type: 'turn/end', data: { turn: 1 } })
   f.result(f.call('web_search', { queries: ['next'] }, 2), search([{ url: A, title: 'Updated' }]))
@@ -47,27 +47,27 @@ test('search deduplicates exact URLs, retains absent fields and fetched content 
 
 test('direct fetch creates material; redirects stay separate; failures retain successful content', () => {
   const f = fixture()
-  f.result(f.call('web_fetch', { url: A }), fetch(B, 200, false, 'Header\nBody\nNotice'))
+  f.result(f.call('web_fetch', { target: A }), fetch(B, 200, false, 'Header\nBody\nNotice'))
   const saved = f.state.items.S1.fetched
   assert.equal(saved.finalUrl, B)
   assert.equal(saved.content, 'Header\nBody\nNotice')
   f.result(f.call(), search([{ url: B }]))
   assert.equal(f.state.urlIndex[B], 'S2')
-  f.result(f.call('web_fetch', { url: A }), fetch(A, 404), { text: 'not found' })
+  f.result(f.call('web_fetch', { target: A }), fetch(A, 404), { text: 'not found' })
   assert.deepEqual(f.state.items.S1.fetched, saved)
   assert.equal(f.state.items.S1.lastFetch.statusCode, 404)
-  f.result(f.call('web_fetch', { url: A }), undefined, { isError: true, error: 'timeout' })
+  f.result(f.call('web_fetch', { target: A }), undefined, { isError: true, error: 'timeout' })
   assert.deepEqual(f.state.items.S1.fetched, saved)
   assert.equal(f.state.items.S1.lastFetch.error, 'timeout')
-  f.result(f.call('web_fetch', { url: A }), fetch(A, 200, false, 'New body'))
+  f.result(f.call('web_fetch', { target: A }), fetch(A, 200, false, 'New body'))
   assert.equal(f.state.items.S1.fetched.content, 'New body')
   assert.equal(f.state.items.S1.lastFetch.status, 'success')
 })
 
 test('correlates out-of-order results by source seq and call id; cleans incomplete calls', () => {
   const f = fixture()
-  const a = f.call('web_fetch', { url: A })
-  const b = f.call('web_fetch', { url: B })
+  const a = f.call('web_fetch', { target: A })
+  const b = f.call('web_fetch', { target: B })
   const before = f.state
   f.result(a, fetch(), { event: { sourceEventSeqs: [999] } })
   assert.equal(f.state, before)
@@ -87,18 +87,18 @@ test('ignores unknown, invalid, missing metadata and surface replacements withou
   const f = fixture()
   const empty = f.state
   f.call('another_tool')
-  f.call('web_fetch', { url: 'file:///tmp/a' })
+  f.call('web_fetch', { target: 42 })
   f.emit({ type: 'tool/call', data: { name: 'web_fetch', arguments: '{' } })
   f.emit({ type: 'turn/start', data: { turn: 1 } })
   assert.equal(f.state, empty)
   f.result(f.call(), search([{ url: A, title: 42 }]))
   f.result(f.call(), undefined)
-  f.result(f.call('web_fetch', { url: A }), { url: A, statusCode: 200 })
+  f.result(f.call('web_fetch', { target: A }), { url: A, statusCode: 200 })
   f.result(f.call(), search([{ url: A }]), { isError: true })
   assert.deepEqual(f.state.items, {})
   f.result(f.call(), search([{ url: A }]))
   const item = f.state.items.S1
-  const c = f.call('web_fetch', { url: A })
+  const c = f.call('web_fetch', { target: A })
   f.result(c, fetch(), { event: { surfaceOp: { op: 'replace', startSeq: 1, endSeq: 1 } } })
   assert.equal(f.state.items.S1, item)
   assert.equal(f.state.items.S1.fetched, undefined)
@@ -119,12 +119,32 @@ test('fetch accepts only metadata content, never a receipt as body; state versio
     { url: A, statusCode: 200, truncated: false },
     { url: A, statusCode: 200, truncated: false, content: 42 },
   ]) {
-    f.result(f.call('web_fetch', { url: A }), meta, { text: 'Must not become saved content' })
+    f.result(f.call('web_fetch', { target: A }), meta, { text: 'Must not become saved content' })
     assert.deepEqual(f.state.items, {})
   }
-  f.result(f.call('web_fetch', { url: A }), fetch(A, 200, false, 'Metadata body'), { text: 'Short receipt' })
+  f.result(f.call('web_fetch', { target: A }), fetch(A, 200, false, 'Metadata body'), { text: 'Short receipt' })
   assert.equal(f.state.items.S1.fetched.content, 'Metadata body')
-  f.result(f.call('web_fetch', { url: A }), { url: A, statusCode: 200, truncated: false, content: null })
+  f.result(f.call('web_fetch', { target: A }), { url: A, statusCode: 200, truncated: false, content: null })
   assert.equal(f.state.items.S1.fetched.content, 'Metadata body')
   assert.equal(materialsProjection.stateVersion, 1)
+})
+
+test('handle failures update existing entries; invalid targets create no material', () => {
+  const f = fixture()
+  f.result(f.call('web_fetch', { target: A }), fetch(B))
+  const saved = structuredClone(f.state.items.S1.fetched)
+  f.result(f.call('web_fetch', { target: 'S1' }), undefined, { isError: true, error: 'network failure' })
+  assert.equal(f.state.items.S1.lastFetch.error, 'network failure')
+  assert.deepEqual(f.state.items.S1.fetched, saved)
+  f.result(f.call('web_fetch', { target: 'S1' }), { ...fetch(B, 503), requestUrl: A })
+  assert.equal(f.state.items.S1.lastFetch.statusCode, 503)
+  assert.deepEqual(f.state.items.S1.fetched, saved)
+  for (const target of ['S99', 'file:///bad', 'invalid', '']) {
+    f.result(f.call('web_fetch', { target }), undefined, { isError: true, error: 'invalid target' })
+  }
+  assert.equal(f.state.nextHandle, 2)
+  f.result(f.call('web_fetch', { target: B }), undefined, { isError: true, error: 'offline' })
+  assert.equal(f.state.items.S2.url, B)
+  assert.equal(f.state.items.S2.lastFetch.error, 'offline')
+  assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
 })

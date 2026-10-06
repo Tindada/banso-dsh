@@ -14,8 +14,8 @@ import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import Web from '@deepseek-ai/dsh-web'
 import * as WebTools from '@deepseek-ai/dsh-tool-web'
-import * as Materials from '../lib/index.js'
-import * as BansoPrompt from '../../prompt/lib/index.js'
+import * as Materials from 'banso-dsh-materials'
+import * as BansoPrompt from 'banso-dsh-prompt'
 import * as WrappedTools from 'banso-dsh-tool-web'
 import Invariants from '@deepseek-ai/dsh-invariants'
 import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
@@ -24,16 +24,20 @@ import * as LoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 const url = 'https://example.com/article'
 class Adapter extends LlmAdapter {
   requests = []
+  targets = [url]
   async resolveModel(provider, model) { return { provider, id: model, name: model } }
   async *stream(request) {
     this.requests.push(request)
     const count = this.requests.length
     if (count < 3) {
       const name = count === 1 ? 'web_search' : 'web_fetch'
-      const args = JSON.stringify(count === 1 ? { queries: ['news'] } : { url })
-      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'tool-call-delta', index: 0, id: `call-${count}`, name, argumentsDelta: args }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: `call-${count}`, name, arguments: args } }
+      const argumentsList = count === 1 ? [{ queries: ['news'] }] : this.targets.map(target => ({ target }))
+      for (const [index, args] of argumentsList.entries()) {
+        const id = `call-${count}-${index}`, argumentsText = JSON.stringify(args)
+        yield { type: 'block-start', index, blockType: 'tool-call' }
+        yield { type: 'tool-call-delta', index, id, name, argumentsDelta: argumentsText }
+        yield { type: 'block-end', index, block: { type: 'tool-call', id, name, arguments: argumentsText } }
+      }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
     } else {
       yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -43,7 +47,7 @@ class Adapter extends LlmAdapter {
     }
   }
 }
-async function setup(root, enabled = true) {
+async function setup(root, enabled = true, fetchProvider) {
   const ctx = new Context()
   const errors = []
   ctx.on('agent/error', ({ error }) => errors.push(error))
@@ -56,7 +60,8 @@ async function setup(root, enabled = true) {
   ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search() {
     return { sources: [{ url, title: 'Article', snippet: 'Preview' }], truncated: false }
   } })
-  ctx.web.registerFetchProvider({ id: 'fixture', available: () => true, async fetch() {
+  ctx.web.registerFetchProvider({ id: 'fixture', available: () => true, async fetch(request, signal) {
+    if (fetchProvider) return fetchProvider(request, signal)
     return { url: url + '/final', statusCode: 200, body: { kind: 'html', content: '<h1>Article</h1><p>Evidence.</p>' }, truncated: false }
   } })
   await ctx.plugin(WebTools)
@@ -101,7 +106,7 @@ test('wrapped native tools feed materials through metadata, survive JSONL and co
   }
   const toolMessages = first.adapter.requests[2].messages.filter(message => message.role === 'tool')
   assert.match(toolMessages[0].content[0].text, /^Search completed/)
-  assert.match(toolMessages[1].content[0].text, /^Fetch completed/)
+  assert.match(toolMessages[1].content[0].text, /Fetch completed/)
   assert.doesNotMatch(toolMessages[1].content[0].text, /Evidence/)
   const events = agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
   assert.equal(events.length, 2)
@@ -155,6 +160,62 @@ test('wrapped native tools feed materials through metadata, survive JSONL and co
   assert.equal(after.nextHandle, before.nextHandle)
   assert.equal(after.items.S1.fetched.content, before.items.S1.fetched.content)
   const resumedResults = restored.session.snapshotEvents().filter(event => event.type === 'tool/result')
-  assert.match(resumedResults.at(-1).data.message.content[0].text, /^Fetch completed/)
+  assert.match(resumedResults.at(-1).data.message.content[0].text, /Fetch completed/)
   assert.equal(resumedResults.at(-1).data.meta.content, before.items.S1.fetched.content)
+})
+
+test('single handle and URL calls overlap in the default loop and restore new handles', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'banso-target-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const second = url + '/second'
+  const releases = new Map()
+  const first = await setup(root, true, request => new Promise(resolve => {
+    releases.set(request.url, () => resolve({ url: request.url + '/redirect', statusCode: 200, body: { kind: 'text', content: `Evidence for ${request.url}` }, truncated: false }))
+  }))
+  let closed = false
+  t.after(async () => { if (!closed) await first.ctx.fiber.dispose() })
+  t.after(() => { for (const release of releases.values()) release() })
+  first.adapter.targets = ['S1', second]
+  const { agent } = await first.ctx.agents.create({ sessionId: SessionId('targets'), agentOptions: { provider: 'mock', model: 'mock' } })
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
+  for (let i = 0; i < 100 && releases.size < 2; i++) await new Promise(resolve => setImmediate(resolve))
+  assert.equal(releases.size, 2, 'both provider requests start before either completes')
+  assert.equal(stateOf(first.ctx, agent).nextHandle, 2, 'new URL not allocated during execution')
+  releases.get(second)()
+  releases.get(url)()
+  await agent.whenIdle()
+  assert.deepEqual(first.errors, [])
+  const before = structuredClone(stateOf(first.ctx, agent))
+  assert.equal(before.items.S1.url, url)
+  assert.equal(before.items.S2.url, second)
+  assert.equal(before.items.S2.fetched.finalUrl, second + '/redirect')
+  assert.equal(before.nextHandle, 3)
+  const results = agent.session.snapshotEvents().filter(event => event.type === 'tool/result' && event.data.meta?.requestUrl)
+  assert.deepEqual(results.map(event => event.data.meta.requestUrl), [url, second])
+  assert.match(textOf(results[0].data.message), /S1/)
+  assert.doesNotMatch(textOf(results[1].data.message), /S2/)
+  assert.match(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Material: S2/)
+  assert.doesNotMatch(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Search snippet: Preview/)
+
+  const other = (await first.ctx.agents.create({ sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+  for (const target of ['S999', 'file:///bad']) {
+    const result = await first.ctx.tools.execute({ agent, name: 'web_fetch', arguments: { target }, callId: 'invalid', signal: new AbortController().signal })
+    assert.equal(result.isError, true)
+  }
+  const isolated = await first.ctx.tools.execute({ agent: other, name: 'web_fetch', arguments: { target: 'S1' }, callId: 'isolated', signal: new AbortController().signal })
+  assert.equal(isolated.isError, true)
+  assert.match(textOf(isolated), /Unknown material handle/)
+  await first.ctx.fiber.dispose(); closed = true
+
+  const resumed = await setup(root)
+  t.after(() => resumed.ctx.fiber.dispose())
+  const restored = (await resumed.ctx.agents.resume({ resumeSessionId: SessionId('targets'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+  assert.deepEqual(stateOf(resumed.ctx, restored), before)
+  resumed.adapter.targets = ['S2']
+  restored.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
+  await restored.whenIdle()
+  assert.deepEqual(resumed.errors, [])
+  assert.equal(stateOf(resumed.ctx, restored).nextHandle, 3)
+  const last = restored.session.snapshotEvents().filter(event => event.type === 'tool/result').at(-1)
+  assert.equal(last.data.meta.requestUrl, second)
 })

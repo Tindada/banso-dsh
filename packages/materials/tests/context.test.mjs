@@ -3,14 +3,11 @@ import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
 import Agents from '@deepseek-ai/dsh-agent'
 import Loop from '@deepseek-ai/dsh-agent-loop'
-import Llm, { LlmAdapter, LlmError, createUserMessage, createAssistantMessage } from '@deepseek-ai/dsh-llm'
+import Llm, { LlmAdapter, LlmError, createUserMessage, createAssistantMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
-import Web from '@deepseek-ai/dsh-web'
-import * as NativeTools from '@deepseek-ai/dsh-tool-web'
-import * as WrappedTools from 'banso-dsh-tool-web'
 import * as Materials from '../lib/index.js'
 import { renderMaterials } from '../lib/context.js'
 import { materialsProjection } from '../lib/projection.js'
@@ -28,15 +25,12 @@ class Adapter extends LlmAdapter {
   async resolveModel(provider, model) { return { provider, id: model, name: model } }
   async *stream(request) {
     this.requests.push(request)
-    const action = this.action(request)
-    const block = action === 'fetch'
-      ? { type: 'tool-call', id: `call-${this.requests.length}`, name: 'web_fetch', arguments: JSON.stringify({ url }) }
-      : { type: 'text', text: 'done' }
+    this.action(request)
+    const block = { type: 'text', text: 'done' }
     yield { type: 'block-start', index: 0, blockType: block.type }
-    if (block.type === 'text') yield { type: 'text-delta', index: 0, text: block.text }
-    else yield { type: 'tool-call-delta', index: 0, id: block.id, name: block.name, argumentsDelta: block.arguments }
+    yield { type: 'text-delta', index: 0, text: block.text }
     yield { type: 'block-end', index: 0, block }
-    yield { type: 'finish', reason: { kind: block.type === 'text' ? 'stop' : 'tool-calls' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
 async function harness(t) {
@@ -46,23 +40,26 @@ async function harness(t) {
   ctx.on('agent/error', ({ error }) => errors.push(error))
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, { agents: [] })
-  await ctx.plugin(Web, { fetchProvider: 'fixture' })
   let fail = false
-  ctx.web.registerFetchProvider({ id: 'fixture', available: () => true, async fetch() {
-    return { url: url + '/final', statusCode: fail ? 503 : 200, body: { kind: 'text', content: '正文完整保留' }, truncated: true }
-  } })
-  await ctx.plugin(NativeTools)
-  await ctx.plugin(WrappedTools)
   const fiber = await ctx.plugin(Materials)
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
   const agent = await ctx.agentLoop.create(SessionId('main'), { provider: 'mock', model: 'mock' })
   const run = async (target = agent) => { target.followup(user('research')); await target.whenIdle(); assert.deepEqual(errors, []) }
-  const fetchOnce = () => {
-    let called = false
-    adapter.action = () => { if (!called) { called = true; return 'fetch' } }
+  let count = 0
+  // Supply recorded tool facts directly: context tests do not execute a web tool.
+  const recordFetch = () => {
+    const callId = `fixture-${++count}`
+    const call = agent.session.append('tool/call', {
+      name: 'web_fetch', arguments: JSON.stringify({ target: url }), callId, turn: 0, step: 0,
+    })
+    agent.session.append('tool/result', {
+      turn: 0, step: 0,
+      message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'Fixture receipt' }], isError: false }),
+      meta: { requestUrl: url, url: url + '/final', statusCode: fail ? 503 : 200, truncated: true, content: '正文完整保留' },
+    }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   }
-  return { ctx, agent, adapter, fiber, run, fetchOnce, failFetch: () => { fail = true } }
+  return { ctx, agent, adapter, fiber, run, recordFetch, failFetch: () => { fail = true } }
 }
 
 test('rendering is deterministic, numerically ordered and preserves external text and prior successful content', () => {
@@ -86,20 +83,20 @@ test('rendering is deterministic, numerically ordered and preserves external tex
   assert.deepEqual(state, before)
 })
 
-test('direct fetch, unchanged turns, retries, reload, surface replacement and session isolation', async t => {
+test('material updates, unchanged turns, retries, reload, surface replacement and session isolation', async t => {
   const h = await harness(t)
-  h.fetchOnce()
+  h.recordFetch()
   await h.run()
   const original = locator(h.ctx, h.agent)
-  assert.equal(snapshots(h.adapter.requests[0].messages).length, 0)
-  assert.match(textOf(snapshots(h.adapter.requests[1].messages)[0]), /正文完整保留/)
-  assert.match(textOf(snapshots(h.adapter.requests[1].messages)[0]), /Truncated: true/)
+  assert.equal(snapshots(h.adapter.requests[0].messages).length, 1)
+  assert.match(textOf(snapshots(h.adapter.requests[0].messages)[0]), /正文完整保留/)
+  assert.match(textOf(snapshots(h.adapter.requests[0].messages)[0]), /Truncated: true/)
   let retry = true
   const stopRetry = h.ctx.on('agent/request-error', () => ({ kind: 'retry' }))
   h.adapter.action = () => { if (retry) { retry = false; throw new LlmError('retry', 'RATE_LIMIT') } }
   await h.run()
   stopRetry()
-  assert.equal(h.adapter.requests.length, 4)
+  assert.equal(h.adapter.requests.length, 3)
   for (const request of h.adapter.requests.slice(1)) {
     assert.equal(snapshots(request.messages).length, 1)
     assert.equal(snapshots(request.messages)[0].id, original.messageId)
@@ -124,7 +121,7 @@ test('direct fetch, unchanged turns, retries, reload, surface replacement and se
   assert.notEqual(rebuilt.messageId, original.messageId)
   assert.equal(snapshots(h.adapter.requests.at(-1).messages).length, 1)
   h.failFetch()
-  h.fetchOnce()
+  h.recordFetch()
   await h.run()
   const latest = h.adapter.requests.at(-1).messages
   assert.equal(snapshots(latest).length, 1)
@@ -139,14 +136,14 @@ test('direct fetch, unchanged turns, retries, reload, surface replacement and se
 
 test('rejected admission does not replace an existing snapshot or commit a candidate', async t => {
   const h = await harness(t)
-  h.fetchOnce()
+  h.recordFetch()
   await h.run()
   const original = locator(h.ctx, h.agent)
   const snapshotEventCount = () => h.agent.session.snapshotEvents().filter(e => e.type === 'user/message' && e.data.source.kind === 'banso-materials').length
   const before = snapshotEventCount()
-  const reject = h.ctx.on('agent/pre-step', async ({ step }, next) => step > 1 ? { kind: 'reject' } : next())
+  const reject = h.ctx.on('agent/pre-step', async () => ({ kind: 'reject' }))
   h.failFetch()
-  h.fetchOnce()
+  h.recordFetch()
   await h.run()
   assert.equal(snapshotEventCount(), before)
   assert.deepEqual(locator(h.ctx, h.agent), original)
@@ -159,12 +156,12 @@ test('rejected admission does not replace an existing snapshot or commit a candi
 
 test('a failed admission after replacement is repaired on the next step', async t => {
   const h = await harness(t)
-  h.fetchOnce()
+  h.recordFetch()
   await h.run()
   // Make new material state available without admitting its snapshot yet.
-  const reject = h.ctx.on('agent/pre-step', async ({ step }, next) => step > 1 ? { kind: 'reject' } : next())
+  const reject = h.ctx.on('agent/pre-step', async () => ({ kind: 'reject' }))
   h.failFetch()
-  h.fetchOnce()
+  h.recordFetch()
   await h.run()
   reject()
   await h.fiber.dispose()

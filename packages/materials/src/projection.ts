@@ -25,6 +25,7 @@ const searchMetaSchema = z.object({
 })
 
 const fetchMetaSchema = z.object({
+  requestUrl: urlSchema,
   content: z.string(),
   url: urlSchema,
   statusCode: z.number().int(),
@@ -58,7 +59,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
       name: z.enum(['web_search', 'web_fetch']),
       callId: z.string(),
       turn: z.number().int(),
-      url: urlSchema.optional(),
+      target: z.string().optional(),
     }),
   ),
 })
@@ -75,8 +76,8 @@ function parseCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
   }
 
   if (name === 'web_fetch') {
-    const parsed = z.object({ url: urlSchema }).safeParse(args)
-    return parsed.success ? { name, callId, turn, url: parsed.data.url } : undefined
+    const parsed = z.object({ target: z.string() }).safeParse(args)
+    return parsed.success ? { name, callId, turn, target: parsed.data.target } : undefined
   }
 
   if (name === 'web_search') {
@@ -151,22 +152,19 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
   }
 
   if (call.name === 'web_fetch') {
-    const url = call.url!
     if (event.data.message.isError) {
-      upsert(next, url, item => ({
-        ...item,
-        lastFetch: {
-          status: 'error',
-          time: event.time,
-          error: event.data.error?.reason ?? text,
-        },
-      }))
+      const lastFetch = { status: 'error' as const, time: event.time, error: event.data.error?.reason ?? text }
+      const target = call.target!
+      const url = Object.hasOwn(next.items, target) ? next.items[target]!.url : target
+      if (urlSchema.safeParse(url).success) {
+        upsert(next, url, item => ({ ...item, lastFetch }))
+      }
       return next
     }
 
     const parsed = fetchMetaSchema.safeParse(event.data.meta)
     if (!parsed.success) return next
-    const { statusCode, truncated } = parsed.data
+    const { statusCode, truncated, requestUrl: url } = parsed.data
 
     if (statusCode < 200 || statusCode >= 300) {
       upsert(next, url, item => ({
