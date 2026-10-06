@@ -1,60 +1,42 @@
-# 会话资料与上下文快照
+# 会话资料与证据快照
 
-`banso-dsh-materials` 注册 host-only 的 `bansoMaterials` projection，依赖 `sessionProjections` 和 `agents`。从 `web_search`、`web_fetch` 的既有事件归纳资料，配合 `banso-dsh-tool-web` 的输出协议使用。不写入自定义事件；在每步进入模型请求前呈现最新资料快照。
+`banso-dsh-materials` 从 `web_search`、`web_read` 的工具事件维护 host-only `bansoMaterials` 投影，依赖 `sessionProjections` 和 `agents`。配合 [网页工具](../tool-web/README.md) 的 metadata 协议使用，不调用 LLM、不导入 tool-web、不新增事件类型。
 
-## 读取与结构
+## 状态与更新
 
 ```ts
 const state = ctx.sessionProjections.stateOf(session, 'bansoMaterials')
 const material = state?.items.S1
 ```
 
-导出 `Material`、`MaterialsState`、`FetchedContent` 和 `FetchAttempt` 类型。返回状态由框架持有，调用方不得修改。
+返回状态由框架持有，调用方不得修改。导出 `Material`、`MaterialsState`、`FetchedContent` 和 `Evidence` 类型。
 
-- `items` 按 handle 存放资料；`urlIndex` 按精确 URL 查找 handle；`nextHandle` 保证首次有效发现按日志顺序编号。
-- 资料包含 `handle`、原 URL 和可选的 `title`、`snippet`、`publishedAt`。
-- `fetched` 从 fetch metadata 的必需 `content` 字段保存最后一次成功获取的文本，并保存最终 URL、状态码、截断标记和事件时间。文本包括工具页头与提示，不是原始 HTML 或独立提取的正文。
-- `lastFetch` 表示最近一次抓取尝试，失败时记录错误但不清除 `fetched`。`time` 均为日志事件的 Unix 毫秒时间。
-- `pendingCalls` 是按调用事件 seq 关联结果所需的内部状态，结果处理后删除，turn 结束时清理残留。
+- `items` 按 handle 保存资料，`urlIndex` 按精确请求 URL 索引；首次有效发现按日志顺序分配 `S1`、`S2`。重定向的最终 URL 不合并其他条目。
+- 资料保留标题、snippet、发布时间等搜索字段。搜索仅覆盖本次提供的字段，不清除正文或证据。
+- `fetched` 保存最后成功的格式化正文、最终 URL、截断标记及正文入库时间。失败保留此前正文。
+- `evidence` 为追加的证据组，每组保存 `focus`、`text` 和提取结果入库时间 `time`。失败和空结果不清除已有证据。
+- 正文复用不更改入库时间，也不重复记录全文。正文和证据的时间均取自各自入库的结果事件，单位为 Unix 毫秒。
 
-## 更新规则
+`pendingCalls` 仅保存工具名称与调用身份，通过事件 seq、callId、turn 关联结果；参数校验和目标解析由工具负责。仅原始追加且 metadata 有效的结果更新资料，处理后删除 pending，turn 结束清理残留。不会从短回执猜测正文或证据。操作成功、失败或无相关证据的状态保留在工具回执中，资料快照不重复展示。
 
-- 搜索更新：按 URL 精确去重，复用 handle，仅覆盖本次提供的字段，保留已有抓取内容。
-- 抓取成功：按 metadata 的 `requestUrl` 更新或创建资料，`url` 保存最终地址，重定向不合并条目。metadata 校验通过且 HTTP 为 2xx 时保存 `content`，不从短回执提取正文。
-- 抓取失败：非 2xx 按 `requestUrl` 更新失败状态；工具执行错误时，按调用记录中的原始 `target` 处理——合法 URL 更新或创建条目，已有 handle 更新对应条目，未知或无效目标不创建资料。失败均保留此前成功正文。
-
-结果须通过 `sourceEventSeqs` 关联已识别调用并匹配 callId、turn。无关工具、无法关联或 metadata 格式不符的结果不导入，不从展示文本猜测字段。仅原始追加的工具结果参与资料更新，surface 替换不覆盖资料；因此资料保留的是曾经获得的内容，而非当前 surface 的镜像。
-
-资料跨 turn 保留，不推断任务边界。handle 在单个 session 内稳定，重放同一日志得到相同编号；不同 session 的 S1 没有关联。
-
-## 恢复与兼容边界
-
-投影状态由内存承载，来源是持久化的既有工具事件。JSONL 恢复、插件后加载和重载均可重建；未新增 session 格式或事件类型，投影版本保持 1。当前仍在首版开发，不保留旧 fetch 参数／metadata 的兼容分支，不做状态迁移。不另配投影检查点缓存。
-
-这是从工具事实累计派生的索引，与 DSH 推荐的整份业务状态事件模式不同。纯同步 fold 不访问网络、不读取时钟；JSONL 恢复测试验证了这一用法。
-
-结构化 meta 基于当前 DSH `0.2.0-rc.2` 网页工具协议，fetch 由本项目包装提供必需的 `requestUrl` 和 `content` 字段，升级时需重新验证。只支持直接的原生网页工具调用，不保证同名第三方工具或嵌套复合传输兼容。fetch 文本可能已截断，无法恢复未保存的网页内容。
-
-本版 handle 可用于 `web_fetch` 的单个 `target` 参数；尚未接入最终引用解析，没有证据提取和长期资料库。
+抓取阶段失败可按请求 URL 创建条目。普通工具错误包含非法输入和整体取消，未提交有效 metadata 时不更新资料。提取失败的结果仍可保存本次成功正文。
 
 ## 模型上下文
 
-`agent/pre-step` 中间件等待后续决策；允许进入 step 时，将资料组织成快照，追加到 `decision.messages` 末尾，由默认 loop 提交。资料按 handle 数字排序，保留搜索字段、抓取状态、UTC 时间与全部已保存正文。新增标签和说明用英文，外部资料保持原文。最近抓取失败时，明确标记仍保留的是此前成功内容。
+`renderMaterials()` 展示来源、已保存正文的信息、截断标记，以及各 focus 的证据文本。全文只保存在资料状态，不自动进入主模型上下文。没有有效证据时展示搜索 snippet，有证据后隐藏；底层始终保留 snippet。证据只覆盖所记录的 focus，追问可再次读取同一来源。
 
-已有成功抓取内容的条目不再展示搜索 snippet（即使正文已截断或最近一次重抓失败）；尚无成功抓取内容时仍展示 snippet。底层资料保留 snippet，仅调整快照展示。
+`agent/pre-step` 在允许进入 step 时将最新快照加入消息。资料按 handle 数字排序；内容不变时复用快照，发生变化时用短占位替换旧快照，再追加新快照。消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。
 
-没有资料时不插入，内容不变时不重复追加或移动；资料变化时，通过标准 `user/message` 替换旧快照为简短占位，再追加最新快照。工具调用和短回执保持原状；参考时间仍独立使用 prompt 插件的 runtime context。
+`bansoMaterialsSnapshot` 投影只保存最新快照的 `{ messageId, seq }` 或 `null`。快照被外部操作覆盖时，下步重新插入。卸载停止后续更新，不撤销已写入消息。
 
-消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。另注册 host-only `bansoMaterialsSnapshot` 投影，仅保存最新快照的 `{ messageId, seq }` 或 `null`，不复制正文。使用时结合当前 surface 和派生消息确认快照仍有效；若被其他操作覆盖，下步重新插入。定位记录同样支持 JSONL 重放、后加载和卸载重载。
+## 恢复与边界
 
-JSONL 保存旧完整快照及替换记录；模型当前可见 surface 保留一份最新完整快照和旧占位。卸载插件停止后续更新，不撤销已经写入的消息。正文、占位及历史日志均可能随会话增长，暂不提供摘要、筛选、二次裁剪或总量控制。
+资料跨 turn 保存，handle 仅在当前 session 内有效。纯同步投影不访问网络或读取时钟，支持 JSONL 重放、后加载和卸载重载。状态版本保持 `1`；首版直接替换旧 fetch 协议，不做兼容、历史迁移或额外检查点缓存。
 
-## 验证
+正文可能已被 provider 截断，无法恢复未保存内容。证据和历史日志仍会增长，本版不实现证据合并、总量控制、长期资料库或最终引用语义校验。
 
 ```sh
 pnpm --filter banso-dsh-materials test
 ```
 
-本包测试只验证资料投影和上下文快照：使用模拟工具事件验证更新、失败、调用关联、隔离和确定性重放；配合真实默认 loop 和模拟模型验证快照替换、重试、拒绝进入 step、外部覆盖及插件重载。测试不加载网页工具或网页 provider。
-
-跨包链路及 JSONL 恢复验证见 [Banso 组合层测试](../banso/README.md#组合层测试)。
+投影测试只使用事件夹具；上下文测试使用真实默认 loop、模拟模型和工具事件，覆盖更新、失败、关联、隔离、确定性重放、快照替换、拒绝进入 step 及重载，不加载网页工具或网页 provider。完整读取链路与 JSONL 恢复见 [Banso 组合层测试](../banso/README.md#组合层测试)。

@@ -20,7 +20,8 @@
     "banso-dsh-prompt": "workspace:*",
     "banso-dsh-materials": "workspace:*",
     "banso-dsh-tool-web": "workspace:*",
-    "banso-dsh-web-fetch-jina": "workspace:*"
+    "banso-dsh-web-fetch-jina": "workspace:*",
+    "@deepseek-ai/dsh-tool-call-timeout-policy": "0.2.0-rc.2"
   },
   "files": [
     "base.patch.yml",

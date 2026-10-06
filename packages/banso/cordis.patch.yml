@@ -32,7 +32,10 @@
       name: '@deepseek-ai/dsh-tool-web'
       config:
         search: true
-        fetch: true
+        fetch: false
+
+    - id: tool-call-timeout-policy
+      name: '@deepseek-ai/dsh-tool-call-timeout-policy'
 
     - id: banso-tool-web
       name: banso-dsh-tool-web

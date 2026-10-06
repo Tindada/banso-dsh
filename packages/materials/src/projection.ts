@@ -24,29 +24,33 @@ const searchMetaSchema = z.object({
   answer: z.string().optional(),
 })
 
-const fetchMetaSchema = z.object({
+const readMetaSchema = z.object({
   requestUrl: urlSchema,
+  focus: z.string().refine(value => value.trim().length > 0),
+  content: z.string().optional(),
+  finalUrl: urlSchema.optional(),
+  truncated: z.boolean().optional(),
+  evidence: z.string().optional(),
+  error: z.string().optional(),
+})
+
+const fetchedSchema = z.object({
   content: z.string(),
-  url: urlSchema,
-  statusCode: z.number().int(),
+  finalUrl: urlSchema,
   truncated: z.boolean(),
+  time: z.number(),
+})
+
+const evidenceSchema = z.object({
+  focus: z.string(),
+  text: z.string(),
+  time: z.number(),
 })
 
 const materialSchema = sourceSchema.extend({
   handle: z.string(),
-  fetched: z.object({
-    content: z.string(),
-    finalUrl: urlSchema,
-    statusCode: z.number().int(),
-    truncated: z.boolean(),
-    time: z.number(),
-  }).optional(),
-  lastFetch: z.object({
-    status: z.enum(['success', 'error']),
-    time: z.number(),
-    statusCode: z.number().int().optional(),
-    error: z.string().optional(),
-  }).optional(),
+  fetched: fetchedSchema.optional(),
+  evidence: z.array(evidenceSchema).optional(),
 })
 
 const stateSchema: z.ZodType<MaterialsState> = z.object({
@@ -56,37 +60,18 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
   pendingCalls: z.record(
     z.string(),
     z.object({
-      name: z.enum(['web_search', 'web_fetch']),
+      name: z.enum(['web_search', 'web_read']),
       callId: z.string(),
       turn: z.number().int(),
-      target: z.string().optional(),
     }),
   ),
 })
 
-function parseCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
+function trackCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
   const { name, callId, turn } = event.data
-  if (name !== 'web_search' && name !== 'web_fetch') return undefined
+  if (name !== 'web_search' && name !== 'web_read') return undefined
 
-  let args: unknown
-  try {
-    args = JSON.parse(event.data.arguments)
-  } catch {
-    return undefined
-  }
-
-  if (name === 'web_fetch') {
-    const parsed = z.object({ target: z.string() }).safeParse(args)
-    return parsed.success ? { name, callId, turn, target: parsed.data.target } : undefined
-  }
-
-  if (name === 'web_search') {
-    const parsed = z.object({queries: z.array(z.string().trim().min(1)).min(1),}).safeParse(args)
-
-    return parsed.success ? { name, callId, turn } : undefined
-  }
-
-  return undefined
+  return { name, callId, turn }
 }
 
 /** Updates only detached containers; existing records remain immutable. */
@@ -99,7 +84,7 @@ function upsert(state: MaterialsState, url: string, update: (item: Material) => 
 
 export function applyMaterials(state: MaterialsState, event: SessionEvent): MaterialsState {
   if (event.type === 'tool/call') {
-    const call = parseCall(event)
+    const call = trackCall(event)
     return call === undefined
       ? state
       : {
@@ -135,11 +120,6 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     items: { ...state.items },
     urlIndex: { ...state.urlIndex },
   }
-  const text = event.data.message.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
-    .join('\n')
-
   if (call.name === 'web_search') {
     if (event.data.message.isError) return next
     const parsed = searchMetaSchema.safeParse(event.data.meta)
@@ -151,44 +131,29 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     return next
   }
 
-  if (call.name === 'web_fetch') {
-    if (event.data.message.isError) {
-      const lastFetch = { status: 'error' as const, time: event.time, error: event.data.error?.reason ?? text }
-      const target = call.target!
-      const url = Object.hasOwn(next.items, target) ? next.items[target]!.url : target
-      if (urlSchema.safeParse(url).success) {
-        upsert(next, url, item => ({ ...item, lastFetch }))
-      }
-      return next
-    }
-
-    const parsed = fetchMetaSchema.safeParse(event.data.meta)
+  if (call.name === 'web_read') {
+    // Ordinary tool errors include invalid input and cancellation; no stage facts were committed.
+    if (event.data.message.isError) return next
+    const parsed = readMetaSchema.safeParse(event.data.meta)
     if (!parsed.success) return next
-    const { statusCode, truncated, requestUrl: url } = parsed.data
-
-    if (statusCode < 200 || statusCode >= 300) {
-      upsert(next, url, item => ({
-        ...item,
-        lastFetch: {
-          status: 'error',
-          time: event.time,
-          statusCode,
-          error: `HTTP ${statusCode}`,
-        },
-      }))
-    } else {
-      upsert(next, url, item => ({
-        ...item,
-        fetched: {
-          content: parsed.data.content,
-          finalUrl: parsed.data.url,
-          statusCode,
-          truncated,
-          time: event.time,
-        },
-        lastFetch: { status: 'success', time: event.time, statusCode },
-      }))
-    }
+    const { requestUrl, focus, content, finalUrl, truncated, evidence } = parsed.data
+    if (content !== undefined && (finalUrl === undefined || truncated === undefined)) return next
+    upsert(next, requestUrl, item => {
+      const updated = content !== undefined
+        ? {
+            ...item,
+            fetched: { content, finalUrl: finalUrl!, truncated: truncated!, time: event.time },
+          }
+        : item
+      if (!evidence?.trim()) return updated
+      return {
+        ...updated,
+        evidence: [
+          ...item.evidence ?? [],
+          { focus, text: evidence, time: event.time },
+        ],
+      }
+    })
   }
   return next
 }

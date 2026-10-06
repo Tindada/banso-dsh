@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Context } from '@deepseek-ai/cordis'
-import Llm from '@deepseek-ai/dsh-llm'
+import Llm, { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
@@ -9,19 +9,39 @@ import Tools from '@deepseek-ai/dsh-tools'
 import Agents from '@deepseek-ai/dsh-agent'
 import Loop from '@deepseek-ai/dsh-agent-loop'
 import Web from '@deepseek-ai/dsh-web'
+import * as Timeout from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import * as NativeTools from '@deepseek-ai/dsh-tool-web'
 import * as WrappedTools from '../lib/index.js'
-
 const url = 'https://example.com/article'
-async function harness(t, { native = true, wrapper = true, cap = 1000 } = {}) {
+const config = { provider: 'mock', model: 'extract' }
+class Adapter extends LlmAdapter {
+  requests = []
+  text = '{"text":"Compact evidence."}'
+  finish = { kind: 'stop' }
+  action
+  async resolveModel(provider, model) { return { provider, id: model, name: model } }
+  async *stream(request) {
+    this.requests.push(request)
+    await this.action?.(request)
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'text-delta', index: 0, text: this.text }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: this.text } }
+    yield { type: 'finish', reason: this.finish }
+  }
+}
+async function harness(t, { native = true, wrapper = true, projection = true, options = {} } = {}) {
   const ctx = new Context()
   t.after(() => ctx.fiber.dispose())
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: 'fixture' })
+  await ctx.plugin(Timeout)
+  // Data-only fixture: this package never loads the materials plugin.
+  const items = {}, urlIndex = {}
+  if (projection) ctx.sessionProjections.register({ key: 'bansoMaterials', stateVersion: 1, stateSchema: { parse: value => value }, init: () => ({ items, urlIndex }), apply: state => state })
   const results = {
     search: { sources: [{ url, title: 'Title', snippet: 'Snippet' }], truncated: false },
-    fetch: { url: url + '/final', statusCode: 200, body: { kind: 'html', content: '<h1>Title</h1><p>Full evidence.</p>' }, truncated: false },
+    fetch: { url: url + '/final', statusCode: 200, body: { kind: 'html', content: '<h1>Title</h1><p>Full body.</p>' }, truncated: false },
   }
   const calls = []
   ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search(request) {
@@ -35,172 +55,192 @@ async function harness(t, { native = true, wrapper = true, cap = 1000 } = {}) {
     if (results.fetch instanceof Error) throw results.fetch
     return results.fetch
   } })
-  const nativeFiber = native ? await ctx.plugin(NativeTools, { fetchMaxOutputChars: cap }) : undefined
-  const wrapperFiber = wrapper ? await ctx.plugin(WrappedTools) : undefined
+  const adapter = new Adapter()
+  ctx.llm.registerAdapter(['mock'], adapter)
+  const nativeFiber = native ? await ctx.plugin(NativeTools, { fetch: false }) : undefined
+  const wrapperFiber = wrapper ? await ctx.plugin(WrappedTools, { ...config, ...options }) : undefined
   let count = 0
   const create = setup => ctx.agents.create({ sessionId: SessionId(`agent-${++count}`), ...(setup ? { setup } : {}) })
-  const execute = (agent, name, args = name === 'web_fetch' ? { target: url } : { queries: ['news'] }) =>
-    ctx.tools.execute({ agent, name, arguments: args, callId: `call-${++count}`, signal: new AbortController().signal })
-  return { ctx, results, calls, nativeFiber, wrapperFiber, create, execute }
+  const execute = (agent, name = 'web_read', args = name === 'web_read' ? { target: url, focus: 'facts' } : { queries: ['news'] }, signal = new AbortController().signal) =>
+    ctx.tools.execute({ agent, name, arguments: args, callId: `call-${++count}`, signal })
+  return { ctx, results, calls, adapter, items, urlIndex, nativeFiber, wrapperFiber, create, execute }
 }
 const textOf = result => result.content.map(block => block.text).join('\n')
 
-test('scoped outputs reuse native execution, schema and settings; global tools remain unchanged', async t => {
+test('read has its own schema and timeout; compact receipts, full metadata and isolated extraction input', async t => {
+  const h = await harness(t), { agent } = await h.create()
+  const definition = h.ctx.tools.get('web_read', agent)
+  assert.equal(definition.timeoutMs, 120000)
+  assert.equal(definition.isConcurrencySafe({ target: url, focus: 'facts' }), true)
+  const schema = h.ctx.tools.schemas(agent).find(tool => tool.name === 'web_read').parameters
+  assert.equal(schema.type, 'object')
+  assert.deepEqual(schema.required, ['target', 'focus'])
+  const result = await h.execute(agent)
+  assert.equal(result.isError, false, textOf(result))
+  assert.match(textOf(result), /Page fetched.*Evidence extracted/)
+  assert.doesNotMatch(textOf(result), /Full body|Compact evidence/)
+  assert.equal(result.meta.requestUrl, url)
+  assert.equal(result.meta.finalUrl, url + '/final')
+  assert.match(result.meta.content, /Full body/)
+  assert.doesNotMatch(result.meta.content, /<p>/)
+  assert.equal(result.meta.evidence, 'Compact evidence.')
+  const request = h.adapter.requests[0]
+  assert.equal(request.model, 'extract')
+  assert.equal(request.maxTokens, 2048)
+  assert.equal(request.tools, undefined)
+  assert.equal(request.messages.length, 1)
+  const input = JSON.parse(textOf(request.messages[0]))
+  assert.equal(input.focus, 'facts')
+  assert.equal(input.content, result.meta.content)
+})
+
+test('handle and exact URL reuse saved body, omit it from metadata, and use new focus', async t => {
   const h = await harness(t)
-  const originals = ['web_search', 'web_fetch'].map(name => h.ctx.tools.get(name))
+  h.items.S1 = { handle: 'S1', url, title: 'Saved title', fetched: { content: 'Saved body', finalUrl: url + '/redirect', truncated: true, time: 123 } }
+  h.urlIndex[url] = 'S1'
   const { agent } = await h.create()
-  for (const original of originals) {
-    const wrapped = h.ctx.tools.get(original.name, agent)
-    assert.equal(h.ctx.tools.get(original.name), original)
-    for (const key of (original.name === 'web_search' ? ['execute', 'parameters', 'timeoutMs', 'isConcurrencySafe', 'presentCall', 'presentResult'] : ['timeoutMs'])) {
-      assert.equal(wrapped[key], original[key])
-    }
-    if (original.name === 'web_search') assert.equal(wrapped.output.schema, original.output.schema)
-  }
-  const fetchSchema = h.ctx.tools.schemas(agent).find(tool => tool.name === 'web_fetch').parameters
-  assert.equal(fetchSchema.type, 'object')
-  assert.deepEqual(fetchSchema.required, ['target'])
-  assert.equal(fetchSchema.properties.target.type, 'string')
-  assert.deepEqual(Object.keys(fetchSchema.properties), ['target'])
-  const search = await h.execute(agent, 'web_search')
-  assert.equal(search.isError, false)
-  assert.equal(textOf(search), 'Search completed. 1 sources returned. Truncated: false.')
-  assert.deepEqual(search.meta.sources, h.results.search.sources)
-  const fetch = await h.execute(agent, 'web_fetch')
-  assert.equal(fetch.isError, false)
-  assert.match(textOf(fetch), /Fetch completed. HTTP 200. Truncated: false./)
-  assert.equal(fetch.meta.requestUrl, url)
-  const original = originals[1]
-  assert.equal(fetch.meta.content, original.output.render({ url }, fetch.value).map(block => block.text).join('\n'))
-  assert.match(fetch.meta.content, /Full evidence\./)
-  assert.equal(fetch.meta.url, url + '/final')
-  assert.equal(h.calls.length, 2)
-  await h.wrapperFiber.dispose()
-  for (const original of originals) assert.equal(h.ctx.tools.get(original.name, agent), original)
-  assert.match(textOf(await h.execute(agent, 'web_fetch', { url })), /Full evidence\./)
-})
-
-test('search answer, empty sources and truncation are retained without source listings', async t => {
-  const h = await harness(t)
-  const { agent } = await h.create()
-  h.results.search = { sources: [], content: 'Provider answer', truncated: true }
-  const result = await h.execute(agent, 'web_search')
-  assert.match(textOf(result), /0 sources/)
-  assert.match(textOf(result), /Truncated: true/)
-  assert.match(textOf(result), /Provider answer/)
-  assert.equal(result.meta.answer, 'Provider answer')
-  h.results.search = new Error('Search unavailable')
-  const failed = await h.execute(agent, 'web_search')
-  assert.equal(failed.isError, true)
-  assert.match(textOf(failed), /Search unavailable/)
-})
-
-test('fetch metadata skips the tool cap and preserves provider truncation, text and failures', async t => {
-  const h = await harness(t, { cap: 180 })
-  const { agent } = await h.create()
-  h.results.fetch = { url, statusCode: 200, body: { kind: 'text', content: 'Evidence '.repeat(200) }, truncated: false }
-  const result = await h.execute(agent, 'web_fetch')
-  assert.equal(result.isError, false)
-  assert.equal(result.meta.truncated, false)
-  assert.ok(result.meta.content.endsWith(h.results.fetch.body.content))
-  assert.match(textOf(result), /Truncated: false/)
-  assert.equal(result.meta.content, NativeTools.formatFetchOutput(result.value, Infinity))
-  h.results.fetch = { ...h.results.fetch, truncated: true }
-  const truncated = await h.execute(agent, 'web_fetch')
-  assert.equal(truncated.meta.truncated, true)
-  assert.match(textOf(truncated), /Truncated: true/)
-  assert.ok(truncated.meta.content.includes(h.results.fetch.body.content))
-  h.results.fetch = { ...h.results.fetch, body: { kind: 'html', content: `<h1>Title</h1><p>${'HTML evidence '.repeat(200)}</p>` }, truncated: false }
-  const html = await h.execute(agent, 'web_fetch')
-  assert.equal(html.meta.truncated, false)
-  assert.match(textOf(html), /Truncated: false/)
-  assert.match(html.meta.content, /# Title/)
-  assert.ok(html.meta.content.includes('HTML evidence '.repeat(200).trim()))
-  assert.doesNotMatch(html.meta.content, /<h1>|<p>/)
-  h.results.fetch = { url, statusCode: 503, body: { kind: 'text', content: 'Unavailable' }, truncated: false }
-  const http = await h.execute(agent, 'web_fetch')
-  assert.equal(http.isError, false)
-  assert.match(textOf(http), /Fetch failed. HTTP 503/)
-  assert.match(http.meta.content, /Unavailable/)
-  h.results.fetch = new Error('Network failure')
-  const failed = await h.execute(agent, 'web_fetch')
-  assert.equal(failed.isError, true)
-  assert.match(textOf(failed), /Network failure/)
-  const invalid = await h.execute(agent, 'web_fetch', {})
-  assert.equal(invalid.isError, true)
-})
-
-test('late loading, native reload, wrapper reload and disposal keep one effective definition', async t => {
-  const h = await harness(t, { native: false, wrapper: false })
-  const handle = await h.create()
-  const wrapper = await h.ctx.plugin(WrappedTools)
-  assert.equal(h.ctx.tools.get('web_fetch', handle.agent), undefined)
-  const native = await h.ctx.plugin(NativeTools)
-  const original = h.ctx.tools.get('web_fetch')
-  assert.notEqual(h.ctx.tools.get('web_fetch', handle.agent), original)
-  await native.dispose()
-  assert.equal(h.ctx.tools.get('web_fetch', handle.agent), undefined)
-  await h.ctx.plugin(NativeTools)
-  assert.notEqual(h.ctx.tools.get('web_fetch'), original)
-  const reloaded = h.ctx.tools.get('web_fetch')
-  assert.notEqual(h.ctx.tools.get('web_fetch', handle.agent).execute, reloaded.execute)
-  await wrapper.dispose()
-  assert.equal(h.ctx.tools.get('web_fetch', handle.agent), reloaded)
-  await h.ctx.plugin(WrappedTools)
-  assert.notEqual(h.ctx.tools.get('web_fetch', handle.agent), reloaded)
-  await handle.dispose()
-  const another = await h.create()
-  assert.match(textOf(await h.execute(another.agent, 'web_fetch')), /Fetch completed/)
-})
-
-test('local overrides and restrictions are respected across independent sessions', async t => {
-  const h = await harness(t)
-  const original = h.ctx.tools.get('web_fetch')
-  const local = { ...original, output: { ...original.output, render: () => [{ type: 'text', text: 'Local tool' }] } }
-  const a = await h.create(agentCtx => { agentCtx.tools.register(local) })
-  const b = await h.create()
-  const c = await h.create(agentCtx => { agentCtx.tools.restrict({ deny: ['web_fetch'] }) })
-  assert.equal(h.ctx.tools.get('web_fetch', a.agent), local)
-  assert.equal(h.ctx.tools.get('web_fetch', c.agent), undefined)
-  assert.equal(textOf(await h.execute(a.agent, 'web_fetch', { url })), 'Local tool')
-  assert.match(textOf(await h.execute(b.agent, 'web_fetch')), /Fetch completed/)
-  const allowAgain = b.agent.ctx.tools.restrict({ deny: ['web_fetch'] })
-  assert.equal(h.ctx.tools.get('web_fetch', b.agent), undefined)
-  allowAgain()
-  assert.match(textOf(await h.execute(b.agent, 'web_fetch')), /Fetch completed/)
-  assert.equal(h.ctx.tools.get('web_fetch', a.agent), local)
-})
-
-test('target validation rejects old arguments; direct URLs do not require materials', async t => {
-  const h = await harness(t)
-  const { agent } = await h.create()
-  for (const args of [{ url }, {}, { target: '' }, { target: [] }, { target: 'file:///bad' }]) {
-    assert.equal((await h.execute(agent, 'web_fetch', args)).isError, true)
+  for (const target of ['S1', url]) {
+    const result = await h.execute(agent, 'web_read', { target, focus: `Focus ${target}` })
+    assert.equal(result.isError, false, textOf(result))
+    assert.equal(result.meta.content, undefined)
+    assert.equal(result.meta.focus, `Focus ${target}`)
+    const input = JSON.parse(textOf(h.adapter.requests.at(-1).messages[0]))
+    assert.equal(input.content, 'Saved body')
+    assert.equal(input.title, 'Saved title')
   }
   assert.equal(h.calls.length, 0)
-  assert.equal(h.ctx.tools.get('web_fetch', agent).isConcurrencySafe({ target: 'S1' }), true)
-  assert.equal(h.ctx.tools.get('web_fetch', agent).isConcurrencySafe({ target: url }), true)
-  const missing = await h.execute(agent, 'web_fetch', { target: 'S1' })
-  assert.equal(missing.isError, true)
-  assert.match(textOf(missing), /Unknown material handle: S1/)
-  assert.equal((await h.execute(agent, 'web_fetch')).isError, false)
-  assert.equal((await h.execute(agent, 'web_fetch', { target: url, url: 'file:///ignored' })).isError, false)
+  assert.equal(h.adapter.requests.length, 2)
 })
 
-test('fetch forwards cancellation and does not publish successful metadata', async t => {
-  const h = await harness(t)
-  const { agent } = await h.create()
-  let started
-  const ready = new Promise(resolve => { started = resolve })
-  h.results.fetch = (_request, signal) => new Promise((_resolve, reject) => {
-    signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-    started()
+test('HTTP and network failures skip extraction; extraction failures retain the fetched body', async t => {
+  const h = await harness(t), { agent } = await h.create()
+  h.results.fetch = { ...h.results.fetch, statusCode: 503 }
+  const http = await h.execute(agent)
+  assert.match(http.meta.error, /Fetch failed: HTTP 503/)
+  assert.equal(http.meta.evidence, undefined)
+  h.results.fetch = new Error('offline')
+  assert.equal((await h.execute(agent)).meta.error, 'Fetch failed: offline')
+  assert.equal(h.adapter.requests.length, 0)
+  h.results.fetch = { url, statusCode: 200, body: { kind: 'text', content: 'RAW BODY' }, truncated: true }
+  for (const text of ['not JSON', '{}', '{"text":42}', '[]']) {
+    h.adapter.text = text
+    const result = await h.execute(agent)
+    assert.equal(result.isError, false)
+    assert.match(result.meta.error, /Extraction failed:/)
+    assert.match(result.meta.content, /RAW BODY/)
+    assert.equal(result.meta.truncated, true)
+  }
+  h.adapter.text = '{"text":""}'
+  assert.equal((await h.execute(agent)).meta.evidence, '')
+  h.adapter.text = '{"text":"partial"}'
+  h.adapter.finish = { kind: 'max-tokens' }
+  assert.match((await h.execute(agent)).meta.error, /Extraction failed:/)
+  h.adapter.action = () => { throw new Error('LLM failed') }
+  assert.match((await h.execute(agent)).meta.error, /LLM failed/)
+})
+
+test('input budget includes framing; missing model route fails without losing body', async t => {
+  const h = await harness(t, { options: { maxInputBytes: 1 } }), { agent } = await h.create()
+  const result = await h.execute(agent)
+  assert.match(result.meta.error, /input exceeds/)
+  assert.match(result.meta.content, /Full body/)
+  assert.equal(h.adapter.requests.length, 0)
+  const noRoute = await harness(t, { options: { provider: undefined, model: undefined } })
+  const a = await noRoute.create()
+  assert.match((await noRoute.execute(a.agent)).meta.error, /No model route/)
+})
+
+test('invalid arguments and missing material/agent fail without making requests', async t => {
+  const h = await harness(t), { agent } = await h.create()
+  for (const args of [{}, { target: url }, { target: url, focus: ' ' }, { target: [], focus: 'x' }, { target: 'file:///bad', focus: 'x' }, { target: 'S99', focus: 'x' }]) {
+    assert.equal((await h.execute(agent, 'web_read', args)).isError, true)
+  }
+  assert.equal((await h.execute(undefined)).isError, true)
+  assert.equal(h.calls.length, 0)
+  const missing = await harness(t, { projection: false }), a = await missing.create()
+  assert.match(textOf(await missing.execute(a.agent)), /Materials projection is not registered/)
+  assert.equal(missing.calls.length, 0)
+})
+
+test('search wrapper preserves native execution and visibility; read loads independently and disposes normally', async t => {
+  const h = await harness(t, { native: false, wrapper: false }), a = await h.create()
+  const wrapper = await h.ctx.plugin(WrappedTools, config)
+  assert.ok(h.ctx.tools.get('web_read', a.agent))
+  assert.equal(h.ctx.tools.get('web_search', a.agent), undefined)
+  const native = await h.ctx.plugin(NativeTools, { fetch: false })
+  const original = h.ctx.tools.get('web_search'), wrapped = h.ctx.tools.get('web_search', a.agent)
+  for (const key of ['execute', 'parameters', 'timeoutMs', 'isConcurrencySafe', 'presentCall', 'presentResult']) assert.equal(wrapped[key], original[key])
+  const search = await h.execute(a.agent, 'web_search')
+  assert.equal(textOf(search), 'Search completed. 1 sources returned. Truncated: false.')
+  assert.deepEqual(search.meta.sources, h.results.search.sources)
+  h.results.search = { sources: [], content: 'Provider answer', truncated: true }
+  assert.match(textOf(await h.execute(a.agent, 'web_search')), /Provider answer/)
+  const local = { ...original, output: { ...original.output, render: () => [{ type: 'text', text: 'Local' }] } }
+  const b = await h.create(c => { c.tools.register(local) })
+  assert.equal(h.ctx.tools.get('web_search', b.agent), local)
+  const c = await h.create(c => { c.tools.restrict({ deny: ['web_read', 'web_search'] }) })
+  assert.equal(h.ctx.tools.get('web_read', c.agent), undefined)
+  assert.equal(h.ctx.tools.get('web_search', c.agent), undefined)
+  const unrestrict = a.agent.ctx.tools.restrict({ deny: ['web_read', 'web_search'] })
+  assert.equal(h.ctx.tools.get('web_read', a.agent), undefined)
+  assert.equal(h.ctx.tools.get('web_search', a.agent), undefined)
+  unrestrict()
+  await native.dispose()
+  assert.ok(h.ctx.tools.get('web_read', a.agent))
+  const reloaded = await h.ctx.plugin(NativeTools, { fetch: false })
+  assert.notEqual(h.ctx.tools.get('web_search', a.agent), h.ctx.tools.get('web_search'))
+  await wrapper.dispose()
+  assert.equal(h.ctx.tools.get('web_read', a.agent), undefined)
+  assert.equal(h.ctx.tools.get('web_search', a.agent), h.ctx.tools.get('web_search'))
+  await h.ctx.plugin(WrappedTools, config)
+  assert.ok(h.ctx.tools.get('web_read', a.agent))
+  await reloaded.dispose()
+})
+
+test('fetch and extraction cancellation propagate with no partial metadata', async t => {
+  for (const stage of ['fetch', 'extract']) {
+    const h = await harness(t), { agent } = await h.create()
+    let started
+    const ready = new Promise(resolve => { started = resolve })
+    const wait = signal => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      started()
+    })
+    if (stage === 'fetch') h.results.fetch = (_request, signal) => wait(signal)
+    else h.adapter.action = request => wait(request.signal)
+    const abort = new AbortController()
+    const pending = h.execute(agent, 'web_read', { target: url, focus: 'facts' }, abort.signal)
+    await ready
+    abort.abort()
+    const result = await pending
+    assert.equal(result.isError, true)
+    assert.equal(result.meta, undefined)
+  }
+})
+
+test('DSH timeout policy cancels in-flight extraction and publishes no partial body', async t => {
+  const h = await harness(t, { options: { timeoutMs: 30 } }), { agent } = await h.create()
+  let aborted = false
+  h.adapter.action = request => new Promise((_resolve, reject) => {
+    request.signal.addEventListener('abort', () => { aborted = true; reject(request.signal.reason) }, { once: true })
   })
-  const abort = new AbortController()
-  const result = h.ctx.tools.execute({ agent, name: 'web_fetch', arguments: { target: url }, callId: 'cancel', signal: abort.signal })
-  await ready
-  abort.abort()
-  const cancelled = await result
-  assert.equal(cancelled.isError, true)
-  assert.equal(cancelled.meta, undefined)
+  // DSH deadlines are unref timers; keep the mock request alive until settlement.
+  const keepAlive = setInterval(() => {}, 1000)
+  try {
+    const result = await h.execute(agent)
+    assert.equal(aborted, true)
+    assert.equal(result.isError, true)
+    assert.equal(result.error.info.code, 'TOOL_TIMEOUT')
+    assert.equal(result.meta, undefined)
+  } finally { clearInterval(keepAlive) }
+})
+
+
+test('configuration validates paired routes and positive budgets', () => {
+  for (const value of [{ maxInputBytes: 0 }, { maxOutputTokens: -1 }, { timeoutMs: 0 }]) {
+    assert.throws(() => WrappedTools.Config(value))
+  }
+  for (const value of [{ provider: 'mock' }, { model: 'extract' }]) {
+    assert.throws(() => WrappedTools.apply({}, value), /configured together/)
+  }
 })

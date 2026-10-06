@@ -4,7 +4,7 @@ import { materialsProjection } from './projection.js'
 import { materialsSnapshotProjection } from './snapshot.js'
 import { registerMaterialsContext } from './context.js'
 
-export type { Material, MaterialsState, FetchedContent, FetchAttempt } from './types.js'
+export type { Material, MaterialsState, FetchedContent, Evidence } from './types.js'
 export type { MaterialsSnapshotState } from './snapshot.js'
 export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents']

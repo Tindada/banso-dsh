@@ -63,7 +63,10 @@ test('first request gets time; steering and later steps retain it; next turn ref
   for (const request of adapter.requests) {
     assert.equal(snapshots(request).length, 1)
     assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
-    assert.match(textOf(request.messages.find(msg => msg.role === 'system')), /web_search/u)
+    const system = textOf(request.messages.find(msg => msg.role === 'system'))
+    assert.match(system, /web_search/u)
+    assert.match(system, /web_read with a specific focus/u)
+    assert.match(system, /Saved pages are reused/u)
   }
   agent.followup(message('再研究一次'))
   await agent.whenIdle()

@@ -1,43 +1,52 @@
-# 网页工具输出包装
+# 网页搜索与证据读取
 
-`banso-dsh-tool-web` 依赖 `tools`、`agents` 和 `sessionProjections`，在 agent scope 中包装原生 `web_search`、`web_fetch`。需要同时加载 `@deepseek-ai/dsh-tool-web`；不复制它的源码，保持全局定义、超时配置和 provider 不变。search 仅调整输出；fetch 增加单条 handle 寻址并复用原生执行。
+`banso-dsh-tool-web` 为原生 `web_search` 提供 agent scope 短回执包装，并独立注册 `web_read`。依赖 `tools`、`agents`、`sessionProjections`、`web` 和 `llm`；需要资料投影 `bansoMaterials`。Banso 组合关闭原生 `web_fetch` 注册，抓取仍通过 DSH 的 `ctx.web.fetch()` 使用已配置 provider。
 
-## fetch 参数
-
-`web_fetch` 每次接受一个 `target`，可传当前 session 的资料 handle 或完整 HTTP(S) URL：
+## 读取
 
 ```json
-{"target": "S1"}
+{"target": "S1", "focus": "项目的开源范围和许可证"}
 ```
 
-```json
-{"target": "https://example.com/article"}
-```
+`target` 也可以是完整 HTTP(S) URL，`focus` 为非空字符串。每次读取一个页面，多页使用多个调用，沿用 DSH 默认并发调度。handle 和直接 URL 都查询当前 session：已有成功正文就复用，否则抓取并保存格式化文本，再按 focus 提取。新 URL 在结果入库后分配 handle。
 
-多个页面使用多个独立工具调用，沿用 DSH 默认 loop 的并发调度。handle 只在执行侧从 `bansoMaterials` 投影读取 URL；直接 URL 不要求预先存在资料。未知 handle、资料查询失败及非法参数沿用普通工具错误。
+提取使用一次无工具的 LLM 调用，输入仅为 focus、来源标题和正文；最终 URL 已包含在正文页头中。结果是一段紧凑证据文本，空文本表示无相关证据。每次成功提取追加一个 focus 证据组；追问可以对同一来源再次读取，不重新抓取。首版不提供刷新、过期、证据去重或长文分块。
 
-执行不分配编号。新 URL 在结果入库时由资料投影分配 handle，下一步快照显示编号。本版不保留旧的单 `url` 参数，不做历史协议兼容或迁移。
+## 配置
 
-## 输出
+| 字段 | 默认值 | 用途 |
+| --- | --- | --- |
+| `provider`、`model` | 当前 session 最新请求的模型路由 | 必须成对覆盖；没有路由时提取失败 |
+| `maxInputBytes` | 200,000 | 提取系统提示词与序列化输入的 UTF-8 字节上限，超限报错而不截取 |
+| `maxOutputTokens` | 2,048 | 提取输出上限；达到上限不保存残缺证据 |
+| `timeoutMs` | 120,000 | read 整体超时，单位毫秒 |
 
-- search：content 返回来源数量、截断状态和可选 answer；不重复来源列表与摘要。metadata 沿用原生 sources、truncated、answer。
-- fetch：content 返回输入目标、请求 URL、成功／非 2xx 失败、HTTP 状态和有效截断标记。metadata 为 `{ requestUrl, url, statusCode, truncated, content }`；`requestUrl` 为原请求地址，`url` 为最终地址，`content` 保存原工具渲染出的文本。`execute` 返回值及其 output schema 在原生结构上增加 `requestUrl`。
-- fetch 的 metadata 文本复用原工具导出的 `formatFetchOutput(result, Infinity)`，保留格式化、HTML 转换与页头，不再应用工具层的长度截断；回执与 metadata 使用相同的截断状态。provider 的大小限制仍然有效，已截断的内容无法恢复，保存的文本也不是原始 HTML。执行异常和取消沿用框架的错误结果。
+Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超时。单独组合本插件时也需加载该策略；仅声明 `timeoutMs` 不会启动计时器。抓取和提取都转发执行取消信号。
 
-`banso-dsh-materials` 只从 fetch 的 `meta.content` 读取成功正文，不从简短回执读取。资料快照负责向模型呈现正文。本包仅通过 `import type` 引入 materials 的类型声明，直接读取有类型的资料投影，不在运行时导入 materials。
+## 结果协议
 
-## 生命周期
+search 的短回执包含来源数量、截断状态和可选 answer；metadata 保留原生结构。
 
-通过 `agent/created` 安装新建和恢复 agent，通过已有 agent 列表支持后加载。监听 `tools/change` 处理原生工具的晚加载、卸载和重载；包装定义按原定义引用缓存。
+read 的执行结果与 metadata 使用同一结构：
 
-重新检查可见性时，先撤销自己的 scope 注册，避免局部包装掩盖新应用的工具限制，再为仍可见的原生全局定义注册包装。同名的其他局部定义保持原样。刷新期间忽略自身产生的工具变更通知；agent 销毁及插件卸载会清理覆盖。
+- `requestUrl`、`focus`：请求地址与本次提取目标。
+- `content`、`finalUrl`、`truncated`：仅在本次成功抓取时提供；复用已保存正文时省略。
+- `evidence`：提取完成时提供，空字符串表示没有相关证据。
+- `error`：失败原因，区分抓取或提取失败；HTTP 非 2xx 的错误文本包含状态码。
 
-支持当前 DSH `0.2.0-rc.2` 原生网页工具和 Banso 的 native 调用组合，不保证同名第三方工具或复合工具传输兼容。
+所有结果使用同一个扁平 schema，不再按抓取和提取分别定义状态枚举。
+正文复用 DSH 的 `formatFetchOutput(result, Infinity)`，包括页头与提示，不是原始 HTML；provider 的截断仍然有效。模型工具回执仅报告状态，正文与证据经 metadata 保存，证据集中在下一步资料快照展示。
 
-## 验证
+抓取成功后提取失败仍保存正文。抓取异常／非 2xx 不调用提取器。未知 handle、非法参数、缺少 agent／投影使用普通工具错误。整体取消或超时不提交阶段 metadata，不保证保存本次尚未入库的正文。
+
+本包仅通过类型依赖读取 materials 投影，不在运行时导入 materials，也不直接修改资料。当前协议替换旧 fetch 协议，不做兼容或迁移。
+
+## 注册与验证
+
+read 是独立工具，支持 DSH 常规作用域限制和卸载。search 包装继续处理已有／新建 agent、原生工具后加载、局部覆盖、限制变更和卸载恢复，不修改全局原生定义。
 
 ```sh
 pnpm --filter banso-dsh-tool-web test
 ```
 
-使用模拟 provider 验证原执行复用、单条 target 校验、取消、简短 content、完整 metadata、格式化与截断、失败、局部覆盖、可见性限制及加载／卸载。测试不访问在线模型或搜索服务。跨包验证见 [Banso 组合层测试](../banso/README.md#组合层测试)。
+测试使用数据夹具、模拟 web／LLM provider 和 DSH 超时策略，不加载 materials 插件或访问在线服务。覆盖正文复用、输入与输出错误、分阶段失败、取消／超时和工具生命周期。跨包验证见 [Banso 组合层测试](../banso/README.md#组合层测试)。当前支持 DSH `0.2.0-rc.2` 的直接工具调用，不保证嵌套复合传输兼容。

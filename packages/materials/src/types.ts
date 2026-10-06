@@ -1,16 +1,14 @@
 export interface FetchedContent {
   content: string
   finalUrl: string
-  statusCode: number
   truncated: boolean
   time: number
 }
 
-export interface FetchAttempt {
-  status: 'success' | 'error'
+export interface Evidence {
+  focus: string
+  text: string
   time: number
-  statusCode?: number | undefined
-  error?: string | undefined
 }
 
 export interface Material {
@@ -20,14 +18,13 @@ export interface Material {
   snippet?: string | undefined
   publishedAt?: string | undefined
   fetched?: FetchedContent | undefined
-  lastFetch?: FetchAttempt | undefined
+  evidence?: Evidence[] | undefined
 }
 
 export interface PendingCall {
-  name: 'web_search' | 'web_fetch'
+  name: 'web_search' | 'web_read'
   callId: string
   turn: number
-  target?: string | undefined
 }
 
 /** JSON-only replay state. Treat all values read through stateOf as read-only. */
