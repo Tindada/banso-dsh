@@ -9,6 +9,7 @@ import Projections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderPrompt, renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import Tools, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import * as BansoPrompt from '../lib/index.js'
+import { RESEARCH_PROMPT } from '../lib/prompts.js'
 
 const T1 = '2026-10-04T08:00:00.000Z'
 const T2 = '2026-10-05T09:00:00.000Z'
@@ -55,7 +56,7 @@ test('configured research prompt replaces defaults literally and retains referen
   const request = adapter.requests[0]
   const system = textOf(request.messages.find(msg => msg.role === 'system'))
   assert.ok(system.includes(researchPrompt))
-  assert.doesNotMatch(system, /Choose search directions/u)
+  assert.ok(!system.includes(RESEARCH_PROMPT))
   assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
 })
 
@@ -83,9 +84,7 @@ test('first request gets time; steering and later steps retain it; next turn ref
     assert.equal(snapshots(request).length, 1)
     assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
     const system = textOf(request.messages.find(msg => msg.role === 'system'))
-    assert.match(system, /web_search/u)
-    assert.match(system, /web_read with a specific focus/u)
-    assert.match(system, /Saved pages are reused/u)
+    assert.ok(system.includes(RESEARCH_PROMPT))
   }
   agent.followup(message('再研究一次'))
   await agent.whenIdle()
@@ -160,7 +159,7 @@ test('agents are isolated and plugin disposal removes registrations and listener
   assert.match(renderContextSnapshot(await assemble(second)), new RegExp(T2, 'u'))
   await fiber.dispose()
   assert.equal(renderContextSnapshot(await assemble(first)), '')
-  assert.doesNotMatch(renderPrompt(await assemble(first)), /web_search/u)
+  assert.ok(!renderPrompt(await assemble(first)).includes(RESEARCH_PROMPT))
   // Reloading must not resurrect state retained by the disposed plugin.
   await ctx.plugin(BansoPrompt)
   assert.equal(renderContextSnapshot(await assemble(first)), '')
