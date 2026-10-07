@@ -31,19 +31,38 @@ class Adapter extends LlmAdapter {
   }
 }
 
-async function harness(t) {
+async function harness(t, config = {}) {
   const ctx = new Context()
   t.after(() => ctx.fiber.dispose())
   for (const plugin of [Llm, Sessions, Projections]) await ctx.plugin(plugin)
   await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false, includeRuntimeContext: true, personaPrefix: 'Banso' })
   for (const plugin of [Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(AgentLoop, { agents: [] })
-  const fiber = await ctx.plugin(BansoPrompt)
+  const fiber = await ctx.plugin(BansoPrompt, config)
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
   const create = id => ctx.agentLoop.create(SessionId(id), { provider: 'mock', model: 'mock' })
   return { ctx, fiber, adapter, create }
 }
+
+test('configured research prompt replaces defaults literally and retains reference time', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(T1) })
+  const researchPrompt = 'Custom research rules with {{literal}} text.'
+  const { adapter, create } = await harness(t, { researchPrompt })
+  const agent = await create('custom-prompt')
+  agent.followup(message('研究'))
+  await agent.whenIdle()
+  const request = adapter.requests[0]
+  const system = textOf(request.messages.find(msg => msg.role === 'system'))
+  assert.ok(system.includes(researchPrompt))
+  assert.doesNotMatch(system, /Choose search directions/u)
+  assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
+})
+
+test('empty research prompt omits research rules', async t => {
+  const { ctx } = await harness(t, { researchPrompt: '' })
+  assert.equal(renderPrompt(await ctx.systemPrompt.assemble()), 'Banso')
+})
 
 test('first request gets time; steering and later steps retain it; next turn refreshes it', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date(T1) })

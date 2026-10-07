@@ -71,6 +71,33 @@ async function harness(t, { native = true, wrapper = true, projection = true, op
 }
 const textOf = result => result.content.map(block => block.text).join('\n')
 
+test('tool guidance replaces native search, follows visibility, and restores on disposal', async t => {
+  const h = await harness(t, { wrapper: false }), { agent } = await h.create()
+  const assemble = () => h.ctx.systemPrompt.assemble({ agent, scope: agent })
+  const section = (assembly, name) => assembly.sections.find(item => item.name === name)?.text
+  const original = await assemble()
+  const wrapper = await h.ctx.plugin(WrappedTools, config)
+  const active = await assemble()
+  assert.equal(active.sections.filter(item => item.name === 'tool:web_search').length, 1)
+  assert.match(section(active, 'tool:web_search'), /materials snapshot/)
+  assert.match(section(active, 'tool:web_read'), /Saved page text is reused/)
+  assert.ok(active.tools.some(tool => tool.name === 'web_read'))
+  assert.deepEqual(active.tools.filter(tool => tool.name !== 'web_read'), original.tools)
+  const allowRead = agent.ctx.tools.restrict({ deny: ['web_read'] })
+  const searchOnly = await assemble()
+  assert.equal(section(searchOnly, 'tool:web_read'), '')
+  assert.equal(section(searchOnly, 'tool:web_search'), section(active, 'tool:web_search'))
+  const allowSearch = agent.ctx.tools.restrict({ deny: ['web_search'] })
+  assert.equal(section(await assemble(), 'tool:web_search'), '')
+  allowSearch()
+  allowRead()
+  await wrapper.dispose()
+  const restored = await assemble()
+  assert.equal(section(restored, 'tool:web_search'), section(original, 'tool:web_search'))
+  assert.equal(section(restored, 'tool:web_read'), undefined)
+  assert.deepEqual(restored.tools, original.tools)
+})
+
 test('read has its own schema and timeout; compact receipts, full metadata and isolated extraction input', async t => {
   const h = await harness(t), { agent } = await h.create()
   const definition = h.ctx.tools.get('web_read', agent)

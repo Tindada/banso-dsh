@@ -6,9 +6,10 @@ import z from '@deepseek-ai/schemastery'
 import { createReadTool } from './read.js'
 import type { ReadConfig } from './read.js'
 import { wrapWebTool } from './output.js'
+import { registerWebGuidance } from './prompts.js'
 
 export const name = 'banso-tool-web'
-export const inject = ['tools', 'agents', 'sessionProjections', 'web', 'llm']
+export const inject = ['tools', 'agents', 'sessionProjections', 'web', 'llm', 'systemPrompt']
 const names = ['web_search'] as const
 
 export interface Config extends ReadConfig {}
@@ -25,6 +26,7 @@ export function apply(ctx: Context, config: Config): void {
     throw new Error('Extraction provider and model must be configured together')
   }
   ctx.tools.register(createReadTool(ctx, config))
+  registerWebGuidance(ctx)
   const registrations = new Map<Agent, (() => void)[]>()
   const wrappers = new WeakMap<ToolDefinition, ToolDefinition>()
   let refreshing = false

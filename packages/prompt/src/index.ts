@@ -1,12 +1,21 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import z from '@deepseek-ai/schemastery'
 import { RESEARCH_PROMPT, referenceTimeText } from './prompts.js'
 
 export const name = 'banso-prompt'
 export const inject = ['systemPrompt', 'agents']
 
-export function apply(ctx: Context): void {
+export interface Config {
+  researchPrompt?: string
+}
+
+export const Config: z<Config> = z.object({
+  researchPrompt: z.string(),
+})
+
+export function apply(ctx: Context, config: Config): void {
   const referenceTimes = new WeakMap<Agent, { turn: number; referenceTime: string }>()
 
   // claim runs before prompt assembly; pre-step middleware would be too late.
@@ -18,7 +27,8 @@ export function apply(ctx: Context): void {
   ctx.systemPrompt.section({
     name: 'banso:research',
     order: 1000,
-    text: RESEARCH_PROMPT,
+    text: config.researchPrompt ?? RESEARCH_PROMPT,
+    interpolate: false,
   })
 
   ctx.systemPrompt.context({

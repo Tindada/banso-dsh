@@ -1,6 +1,12 @@
 # 网页搜索与证据读取
 
-`banso-dsh-tool-web` 为原生 `web_search` 提供 agent scope 短回执包装，并独立注册 `web_read`。依赖 `tools`、`agents`、`sessionProjections`、`web` 和 `llm`；需要资料投影 `bansoMaterials`。Banso 组合关闭原生 `web_fetch` 注册，抓取仍通过 DSH 的 `ctx.web.fetch()` 使用已配置 provider。
+`banso-dsh-tool-web` 为原生 `web_search` 提供 agent scope 短回执包装，并独立注册 `web_read`。依赖 `tools`、`agents`、`sessionProjections`、`web`、`llm` 和 `systemPrompt`；需要资料投影 `bansoMaterials`。Banso 组合关闭原生 `web_fetch` 注册，抓取仍通过 DSH 的 `ctx.web.fetch()` 使用已配置 provider。
+
+## 工具提示词
+
+`src/prompts.ts` 管理主研究模型的两段工具使用规则：在 `system-prompt/assemble` 阶段替换原生 `tool:web_search` 文本，并独立注册 `tool:web_read`。规则说明短回执、资料快照、handle、按 focus 提取及外部数据的信任边界；不负责整体研究策略或最终回答格式。
+
+两段规则分别随对应工具在当前作用域的可见性生效。替换保留其他 section、工具 schema 和上下文。卸载插件后恢复原生搜索规则并移除阅读规则。不修改 DSH 源码，也不影响 read 内部独立提取模型的提示词。
 
 ## 读取
 
