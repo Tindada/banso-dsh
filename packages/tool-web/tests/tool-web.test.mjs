@@ -18,6 +18,7 @@ class Adapter extends LlmAdapter {
   requests = []
   text = '{"text":"Compact evidence."}'
   finish = { kind: 'stop' }
+  usage = { inputTokens: 100, outputTokens: 20, cacheReadTokens: 40, totalTokens: 160 }
   action
   async resolveModel(provider, model) {
     return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } }
@@ -28,6 +29,7 @@ class Adapter extends LlmAdapter {
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text: this.text }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: this.text } }
+    if (this.usage !== undefined) yield { type: 'usage', usage: this.usage }
     yield { type: 'finish', reason: this.finish }
   }
 }
@@ -86,6 +88,9 @@ test('read has its own schema and timeout; compact receipts, full metadata and i
   assert.match(result.meta.content, /Full body/)
   assert.doesNotMatch(result.meta.content, /<p>/)
   assert.equal(result.meta.evidence, 'Compact evidence.')
+  assert.ok(result.meta.fetchMs >= 0)
+  assert.ok(result.meta.extractMs >= 0)
+  assert.deepEqual(result.meta.usage, h.adapter.usage)
   const request = h.adapter.requests[0]
   assert.equal(request.model, 'extract')
   assert.equal(request.reasoningEffort, 'off')
@@ -107,6 +112,7 @@ test('handle and exact URL reuse saved body, omit it from metadata, and use new 
     assert.equal(result.isError, false, textOf(result))
     assert.equal(result.meta.content, undefined)
     assert.equal(result.meta.focus, `Focus ${target}`)
+    assert.equal(result.meta.fetchMs, undefined)
     const input = JSON.parse(textOf(h.adapter.requests.at(-1).messages[0]))
     assert.equal(input.content, 'Saved body')
     assert.equal(input.title, 'Saved title')
@@ -121,6 +127,8 @@ test('HTTP and network failures skip extraction; extraction failures retain the 
   const http = await h.execute(agent)
   assert.match(http.meta.error, /Fetch failed: HTTP 503/)
   assert.equal(http.meta.evidence, undefined)
+  assert.ok(http.meta.fetchMs >= 0)
+  assert.equal(http.meta.extractMs, undefined)
   h.results.fetch = new Error('offline')
   assert.equal((await h.execute(agent)).meta.error, 'Fetch failed: offline')
   assert.equal(h.adapter.requests.length, 0)
@@ -132,12 +140,15 @@ test('HTTP and network failures skip extraction; extraction failures retain the 
     assert.match(result.meta.error, /Extraction failed:/)
     assert.match(result.meta.content, /RAW BODY/)
     assert.equal(result.meta.truncated, true)
+    assert.deepEqual(result.meta.usage, h.adapter.usage)
   }
   h.adapter.text = '{"text":""}'
   assert.equal((await h.execute(agent)).meta.evidence, '')
   h.adapter.text = '{"text":"partial"}'
   h.adapter.finish = { kind: 'max-tokens' }
-  assert.match((await h.execute(agent)).meta.error, /Extraction failed:/)
+  const limited = await h.execute(agent)
+  assert.match(limited.meta.error, /Extraction failed:/)
+  assert.deepEqual(limited.meta.usage, h.adapter.usage)
   h.adapter.action = () => { throw new Error('LLM failed') }
   assert.match((await h.execute(agent)).meta.error, /LLM failed/)
 })
@@ -148,6 +159,7 @@ test('input budget includes framing; missing model route fails without losing bo
   assert.match(result.meta.error, /input exceeds/)
   assert.match(result.meta.content, /Full body/)
   assert.equal(h.adapter.requests.length, 0)
+  assert.equal(result.meta.usage, undefined)
   const noRoute = await harness(t, { options: { provider: undefined, model: undefined } })
   const a = await noRoute.create()
   assert.match((await noRoute.execute(a.agent)).meta.error, /No model route/)

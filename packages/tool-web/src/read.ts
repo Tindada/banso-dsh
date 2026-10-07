@@ -21,6 +21,9 @@ const schema = {
     truncated: { type: 'boolean' },
     evidence: { type: 'string' },
     error: { type: 'string' },
+    fetchMs: { type: 'number' },
+    extractMs: { type: 'number' },
+    usage: { type: 'object', additionalProperties: true },
   },
 } as const satisfies ValueSchemaSpec
 
@@ -54,11 +57,13 @@ export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition
       const result: ReadResult = { requestUrl, focus }
       let content = item?.fetched?.content
       if (content === undefined) {
+        const started = performance.now()
         try {
           const fetched = await ctx.web.fetch({ url: requestUrl }, exec.signal)
           exec.signal.throwIfAborted()
           if (fetched.statusCode < 200 || fetched.statusCode >= 300) {
-            return { ...result, error: `Fetch failed: HTTP ${fetched.statusCode}` }
+            result.error = `Fetch failed: HTTP ${fetched.statusCode}`
+            return result
           }
           content = formatFetchOutput(fetched, Infinity)
           const meta = fetchMetaFromValue(fetched, Infinity) as unknown as WebFetchMeta
@@ -67,15 +72,14 @@ export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition
           result.truncated = meta.truncated
         } catch (error) {
           exec.signal.throwIfAborted()
-          return { ...result, error: `Fetch failed: ${errorText(error)}` }
+          result.error = `Fetch failed: ${errorText(error)}`
+          return result
+        } finally {
+          result.fetchMs = Math.round(performance.now() - started)
         }
       }
-      try {
-        result.evidence = await extractEvidence(ctx, config, session, { focus, title: item?.title, content }, exec.signal)
-      } catch (error) {
-        exec.signal.throwIfAborted()
-        result.error = `Extraction failed: ${errorText(error)}`
-      }
+      const extracted = await extractEvidence(ctx, config, session, { focus, title: item?.title, content }, exec.signal)
+      Object.assign(result, extracted)
       exec.signal.throwIfAborted()
       return result
     },
