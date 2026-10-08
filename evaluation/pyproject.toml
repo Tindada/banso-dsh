@@ -1,0 +1,18 @@
+[project]
+name = "evaluation"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "deepseek-harness-sdk==0.1.5rc1",
+    "pydantic>=2.12,<3",
+    "python-dotenv>=1.2.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

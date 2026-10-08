@@ -5,3 +5,8 @@ packages/banso/base.patch.yml
 .env
 .env.*
 !.env.example
+evaluation/.venv/
+evaluation/runs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
