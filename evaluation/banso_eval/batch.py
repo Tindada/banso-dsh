@@ -36,17 +36,17 @@ def runtime_options() -> dict:
     if not env_file.is_file():
         raise ValueError(f"Create {env_file} from .env.example before running")
     env = {key: value for key, value in dotenv_values(env_file).items() if value is not None}
-    for key in ("DSH_BIN", "DSH_HOME"):
+    for key in ("EVAL_DSH_BIN", "EVAL_DSH_HOME"):
         if not env.get(key, "").strip():
             raise ValueError(f"{key} is required in {env_file}")
-    dsh_bin = evaluation_path(Path(env["DSH_BIN"]))
-    dsh_home = evaluation_path(Path(env["DSH_HOME"]))
-    profile = env.get("DSH_PROFILE", "banso-dsh")
-    model = env.get("DSH_MODEL", "deepseek-flash").strip()
+    dsh_bin = evaluation_path(Path(env["EVAL_DSH_BIN"]))
+    dsh_home = evaluation_path(Path(env["EVAL_DSH_HOME"]))
+    profile = env.get("EVAL_DSH_PROFILE", "banso-dsh")
+    model = env.get("EVAL_DSH_MODEL", "deepseek-flash").strip()
     if not dsh_bin.is_file() or not os.access(dsh_bin, os.X_OK):
         raise ValueError(f"DSH executable is missing or not executable: {dsh_bin}")
     if not profile or Path(profile).name != profile or profile in {".", ".."}:
-        raise ValueError("DSH_PROFILE must be a single directory name")
+        raise ValueError("EVAL_DSH_PROFILE must be a single directory name")
     if not (dsh_home / "profiles" / profile / "package.json").is_file():
         raise ValueError(f"Profile not installed in {dsh_home}: {profile}")
     if not model:

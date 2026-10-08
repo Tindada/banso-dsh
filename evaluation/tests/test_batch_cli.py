@@ -11,7 +11,7 @@ from test_answer import CASE, FakeHarness
 
 @pytest.fixture
 def cli(tmp_path, monkeypatch):
-    monkeypatch.setenv("DSH_MODEL", "test-model")
+    monkeypatch.setenv("EVAL_DSH_MODEL", "test-model")
     monkeypatch.setattr(batch, "EVALUATION_DIR", tmp_path)
     binary = tmp_path / "dsh"
     binary.write_text("#!/bin/sh\nexit 0\n")
@@ -34,16 +34,16 @@ def cli(tmp_path, monkeypatch):
     monkeypatch.setattr(batch, "DeepSeekHarness", factory)
     source = tmp_path / "source.json"
     source.write_text('{"revision":"test"}')
-    (tmp_path / ".env").write_text(f"DSH_BIN={binary}\nDSH_HOME={home}\n")
+    (tmp_path / ".env").write_text(f"EVAL_DSH_BIN={binary}\nEVAL_DSH_HOME={home}\n")
     args = ["--input", str(case), "--output", str(tmp_path / "runs")]
     return args, harness, options
 
 
 def test_cli_file_stdout_and_env_model(cli, tmp_path, monkeypatch, capsys):
     args, harness, options = cli
-    monkeypatch.setenv("DSH_MODEL", "from-process")
+    monkeypatch.setenv("EVAL_DSH_MODEL", "from-process")
     env = tmp_path / ".env"
-    env.write_text(env.read_text() + "DSH_MODEL=from-file\nDEEPSEEK_API_KEY=fake-test-secret\n")
+    env.write_text(env.read_text() + "EVAL_DSH_MODEL=from-file\nDEEPSEEK_API_KEY=fake-test-secret\n")
     assert batch.main(args) == 0
     captured = capsys.readouterr()
     result = json.loads(captured.out)
@@ -55,7 +55,7 @@ def test_cli_file_stdout_and_env_model(cli, tmp_path, monkeypatch, capsys):
     assert "SDK startup chatter" in captured.err
     assert "fake-test-secret" not in captured.out + captured.err
     assert options["model"] == "from-file"
-    assert options["env"]["DSH_MODEL"] == "from-file"
+    assert options["env"]["EVAL_DSH_MODEL"] == "from-file"
     assert options["env"]["DEEPSEEK_API_KEY"] == "fake-test-secret"
     assert harness.closed
 
@@ -72,10 +72,10 @@ def test_cli_answer_failure(cli, tmp_path, capsys):
 
 def test_cli_uses_fixed_env_and_working_directory(cli, tmp_path, monkeypatch, capsys):
     args, _, options = cli
-    monkeypatch.setenv("DSH_MODEL", "process-model")
+    monkeypatch.setenv("EVAL_DSH_MODEL", "process-model")
     other = tmp_path / "other"
     other.mkdir()
-    (other / ".env").write_text("DSH_MODEL=wrong-directory\n")
+    (other / ".env").write_text("EVAL_DSH_MODEL=wrong-directory\n")
     monkeypatch.chdir(other)
     assert batch.main(args) == 0
     capsys.readouterr()
@@ -111,7 +111,7 @@ def test_real_module_cli_rejects_bad_input_before_sdk(tmp_path):
 
 def test_default_model_and_blank_override(cli, tmp_path, monkeypatch, capsys):
     args, harness, options = cli
-    monkeypatch.delenv("DSH_MODEL", raising=False)
+    monkeypatch.delenv("EVAL_DSH_MODEL", raising=False)
     assert batch.main(args) == 0
     assert options["model"] == "deepseek-flash"
     manifest = json.loads((tmp_path / "runs" / "manifest.json").read_text())
@@ -119,12 +119,12 @@ def test_default_model_and_blank_override(cli, tmp_path, monkeypatch, capsys):
     assert harness.closed
     capsys.readouterr()
     env = tmp_path / ".env"
-    env.write_text(env.read_text() + 'DSH_MODEL="   "\n')
+    env.write_text(env.read_text() + 'EVAL_DSH_MODEL="   "\n')
     assert batch.main(args) == 2
     assert "Model must not be blank" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("missing", ["file", "DSH_BIN", "DSH_HOME"])
+@pytest.mark.parametrize("missing", ["file", "EVAL_DSH_BIN", "EVAL_DSH_HOME"])
 def test_missing_fixed_runtime_configuration(cli, tmp_path, capsys, missing):
     args, _, options = cli
     env = tmp_path / ".env"

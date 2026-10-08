@@ -34,16 +34,16 @@ cp .env.example .env  # 已有 .env 时直接编辑，不覆盖
 在 `evaluation/.env` 中填写：
 
 ```dotenv
-DSH_BIN=/absolute/path/to/node_modules/.bin/dsh
-DSH_HOME=/absolute/path/to/dsh-home
-DSH_PROFILE=banso-dsh
-DSH_MODEL=deepseek-flash
+EVAL_DSH_BIN=/absolute/path/to/node_modules/.bin/dsh
+EVAL_DSH_HOME=/absolute/path/to/dsh-home
+EVAL_DSH_PROFILE=banso-dsh
+EVAL_DSH_MODEL=deepseek-flash
 DEEPSEEK_API_KEY=...
 TAVILY_API_KEY=...
 JINA_API_KEY=...
 ```
 
-`DSH_BIN`、`DSH_HOME` 必填；profile 默认 `banso-dsh`，模型默认 `deepseek-flash`。Jina 密钥可选。运行配置只读取这份固定 `.env`；其中的值覆盖子进程同名环境变量，不读取进程里的 `DSH_MODEL` 作为模型选择。
+`EVAL_DSH_BIN`、`EVAL_DSH_HOME` 必填；profile 默认 `banso-dsh`，模型默认 `deepseek-flash`。Jina 密钥可选。运行配置只读取这份固定 `.env`；其中的值覆盖子进程同名环境变量，不读取进程里的 `EVAL_DSH_MODEL` 作为模型选择。
 
 答题 CLI 仅保留三个参数：
 
