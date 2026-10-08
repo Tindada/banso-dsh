@@ -20,13 +20,14 @@ def save(path, value):
 @pytest.fixture
 def config(tmp_path):
     cases = [dict(id=i, question=f"Question {i}", answer_type="item") for i in (1, 2, 3)]
-    questions = tmp_path / "questions.jsonl"
+    (tmp_path / "derived").mkdir()
+    questions = tmp_path / "derived" / "questions.jsonl"
     questions.write_text("".join(json.dumps(c) + "\n" for c in cases))
     selection = save(tmp_path / "selection.json", {"selected_case_ids": [3, 1, 2]})
     source = save(tmp_path / "source.json", {"revision": "test"})
     output = tmp_path / "run"
     args = ["--input", str(questions),
-            "--source", str(source), "--output", str(output)]
+            "--output", str(output)]
     return cases, questions, selection, source, output, args
 
 
@@ -58,7 +59,7 @@ def fake(monkeypatch):
     FakeHarness.instances = []
     FakeHarness.interrupt_at = None
     monkeypatch.setattr(batch, "DeepSeekHarness", FakeHarness)
-    monkeypatch.setattr(batch, "runtime_options", lambda args: {"model": "test", "env": {"KEY": "secret"}})
+    monkeypatch.setattr(batch, "runtime_options", lambda: {"model": "test", "env": {"KEY": "secret"}})
     return FakeHarness
 
 
@@ -105,7 +106,7 @@ def test_prepare_subset_without_run_directory(config):
 
 def test_refuse_overwrite_and_invalid_input(config, fake):
     _, questions, *_, output, args = config
-    execute = args + ["--dsh-bin", "/fake", "--dsh-home", "/fake"]
+    execute = args
     output.mkdir()
     assert batch.main(execute) == 2
     assert not fake.instances
@@ -116,7 +117,7 @@ def test_refuse_overwrite_and_invalid_input(config, fake):
 
 def test_interrupt_resume_and_config_guard(config, fake, capsys):
     *_, output, args = config
-    execute = args + ["--dsh-bin", "/fake", "--dsh-home", "/fake"]
+    execute = args
     fake.interrupt_at = 1
     assert batch.main(execute) == 130
     assert len(batch.read_jsonl(output / "results.jsonl")) == 1

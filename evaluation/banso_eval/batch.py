@@ -22,28 +22,37 @@ def _close_harness(harness: DeepSeekHarness) -> None:
         print(f"SDK shutdown warning: {exc}", file=sys.stderr)
 
 
-def runtime_options(args) -> dict:
-    """Validate explicit runtime paths and resolve environment/model precedence."""
-    dsh_bin = args.dsh_bin.expanduser().resolve()
-    dsh_home = args.dsh_home.expanduser().resolve()
-    cwd = args.cwd.expanduser().resolve()
+EVALUATION_DIR = Path(__file__).resolve().parents[1]
+
+
+def evaluation_path(path: Path) -> Path:
+    path = path.expanduser()
+    return (path if path.is_absolute() else EVALUATION_DIR / path).resolve()
+
+
+def runtime_options() -> dict:
+    """Read fixed runtime configuration from evaluation/.env."""
+    env_file = EVALUATION_DIR / ".env"
+    if not env_file.is_file():
+        raise ValueError(f"Create {env_file} from .env.example before running")
+    env = {key: value for key, value in dotenv_values(env_file).items() if value is not None}
+    for key in ("DSH_BIN", "DSH_HOME"):
+        if not env.get(key, "").strip():
+            raise ValueError(f"{key} is required in {env_file}")
+    dsh_bin = evaluation_path(Path(env["DSH_BIN"]))
+    dsh_home = evaluation_path(Path(env["DSH_HOME"]))
+    profile = env.get("DSH_PROFILE", "banso-dsh")
+    model = env.get("DSH_MODEL", "deepseek-flash").strip()
     if not dsh_bin.is_file() or not os.access(dsh_bin, os.X_OK):
         raise ValueError(f"DSH executable is missing or not executable: {dsh_bin}")
-    if not cwd.is_dir():
-        raise ValueError(f"Working directory not found: {cwd}")
-    if not args.profile or Path(args.profile).name != args.profile or args.profile in {".", ".."}:
-        raise ValueError("profile must be a single directory name")
-    if not (dsh_home / "profiles" / args.profile / "package.json").is_file():
-        raise ValueError(f"Profile not installed in {dsh_home}: {args.profile}")
-    env = {}
-    if args.env_file is not None:
-        env_file = args.env_file.expanduser().resolve()
-        if not env_file.is_file():
-            raise ValueError(f"Environment file not found: {env_file}")
-        env = {key: value for key, value in dotenv_values(env_file).items() if value is not None}
-    model = args.model or env.get("DSH_MODEL") or os.getenv("DSH_MODEL") or "deepseek-v4-flash"
-    return dict(dsh_bin=str(dsh_bin), dsh_home=str(dsh_home), profile=args.profile,
-                cwd=str(cwd), runtime_cwd=str(cwd), model=model, env=env)
+    if not profile or Path(profile).name != profile or profile in {".", ".."}:
+        raise ValueError("DSH_PROFILE must be a single directory name")
+    if not (dsh_home / "profiles" / profile / "package.json").is_file():
+        raise ValueError(f"Profile not installed in {dsh_home}: {profile}")
+    if not model:
+        raise ValueError("Model must not be blank")
+    return dict(dsh_bin=str(dsh_bin), dsh_home=str(dsh_home), profile=profile,
+                cwd=str(EVALUATION_DIR), runtime_cwd=str(EVALUATION_DIR), model=model, env=env)
 
 
 
@@ -105,25 +114,19 @@ def run_cases(harness, cases, output):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=Path("data/gisa/derived/cases_60.jsonl"))
-    parser.add_argument("--source", type=Path, default=Path("data/gisa/source.json"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--dsh-bin", type=Path, required=True)
-    parser.add_argument("--dsh-home", type=Path, required=True)
-    parser.add_argument("--env-file", type=Path)
-    parser.add_argument("--profile", default="banso-dsh")
-    parser.add_argument("--model")
-    parser.add_argument("--cwd", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
     harness = None
     try:
-        cases = load_cases(args.input)
+        input_path = evaluation_path(args.input)
+        cases = load_cases(input_path)
         serialized = "".join(c.model_dump_json() + "\n" for c in cases)
-        source = json.loads(args.source.read_text())
+        source = json.loads((input_path.parent.parent / "source.json").read_text(encoding="utf-8"))
         spec = {"selected_case_ids": [c.id for c in cases],
                 "cases_sha256": hashlib.sha256(serialized.encode()).hexdigest(), "source": source}
-        output = args.output.expanduser().resolve()
-        options = runtime_options(args)
+        output = evaluation_path(args.output)
+        options = runtime_options()
         if args.resume:
             manifest = json.loads((output / "manifest.json").read_text())
             if any(manifest.get(k) != v for k, v in spec.items()):

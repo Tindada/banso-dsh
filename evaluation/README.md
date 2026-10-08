@@ -22,41 +22,47 @@ uv run python scripts/prepare_gisa.py
 
 `data/gisa/source.json` 记录本地下载版本；数据放在 `data/`，测评输出放在 `runs/`，均不提交。
 
-## 运行
+## 运行配置
 
 需要 Python 3.12+、uv，以及已安装的 DSH 和 Banso profile。在本目录执行：
 
 ```sh
 uv sync --locked
+cp .env.example .env  # 已有 .env 时直接编辑，不覆盖
 ```
 
-单题和多题统一使用 `banso_eval.batch`，题目数量由输入 JSONL 的行数决定。例如准备一个只有一行的 `data/gisa/derived/smoke.jsonl`：
+在 `evaluation/.env` 中填写：
 
-```json
-{"id": 1, "question": "What is Python's official website URL?", "answer_type": "item"}
+```dotenv
+DSH_BIN=/absolute/path/to/node_modules/.bin/dsh
+DSH_HOME=/absolute/path/to/dsh-home
+DSH_PROFILE=banso-dsh
+DSH_MODEL=deepseek-flash
+DEEPSEEK_API_KEY=...
+TAVILY_API_KEY=...
+JINA_API_KEY=...
 ```
+
+`DSH_BIN`、`DSH_HOME` 必填；profile 默认 `banso-dsh`，模型默认 `deepseek-flash`。Jina 密钥可选。运行配置只读取这份固定 `.env`；其中的值覆盖子进程同名环境变量，不读取进程里的 `DSH_MODEL` 作为模型选择。
+
+答题 CLI 仅保留三个参数：
+
+| 参数 | 含义 |
+|---|---|
+| `--input` | 题目 JSONL，默认 `data/gisa/derived/cases_60.jsonl` |
+| `--output` | 必填；本次运行目录，首次运行要求不存在 |
+| `--resume` | 续跑已有目录，跳过所有已记录题目 |
+
+单题和多题使用同一个入口，一行一道题，不支持 stdin。所有相对路径均相对 `evaluation/`，SDK 工作目录也固定为此目录。题目文件应位于 `<题库目录>/derived/`，数据版本自动读取 `<题库目录>/source.json`；自建题目也使用这一结构，并填写自己的来源记录。
+
+例如单题：
 
 ```sh
 uv run python -m banso_eval.batch \
-  --input data/gisa/derived/smoke.jsonl \
-  --output runs/smoke_001 \
-  --dsh-bin /absolute/path/to/node_modules/.bin/dsh \
-  --dsh-home /absolute/path/to/dsh-home \
-  --env-file /absolute/path/to/.env
+  --input data/gisa/derived/case_5.jsonl --output runs/single_5
 ```
 
-`--dsh-bin` 和 `--dsh-home` 必填，显式选择运行环境，不使用 SDK 内置 runtime。`--output` 指定新的运行目录；续跑时指定同一目录并加 `--resume`。输入仅支持 JSONL 文件，不从 stdin 读取。
-
-| 参数 | 默认值／行为 |
-|---|---|
-| `--input` | `data/gisa/derived/cases_60.jsonl` |
-| `--profile` | `banso-dsh` |
-| `--model` | CLI 参数 → 指定 `.env` 的 `DSH_MODEL` → 进程的 `DSH_MODEL` → `deepseek-v4-flash` |
-| `--env-file` | 可选；只读取指定文件，覆盖子进程同名环境变量 |
-| `--cwd` | 工作目录，默认当前目录 |
-| `--source` | `data/gisa/source.json`，记录使用的数据版本；自建题目可指定自己的来源 JSON |
-
-凭据为 `DEEPSEEK_API_KEY`、`TAVILY_API_KEY` 和可选的 `JINA_API_KEY`。不会自动查找 `.env`；在线运行会调用真实服务。
+运行会调用真实服务；`.env` 不提交。
 
 ## 答案与结果
 
@@ -94,10 +100,7 @@ stdout 输出运行汇总 JSON，诊断写 stderr。事件逐条保存到运行�
 uv run python scripts/prepare_gisa.py --selection scripts/banso_60.json \
   --output data/gisa/derived/cases_60.jsonl
 
-uv run python -m banso_eval.batch --output runs/gisa_60_001 \
-  --dsh-bin /absolute/path/to/node_modules/.bin/dsh \
-  --dsh-home /absolute/path/to/dsh-home \
-  --env-file /absolute/path/to/.env
+uv run python -m banso_eval.batch --output runs/gisa_60_001
 
 uv run python -m banso_eval.score runs/gisa_60_001/results.jsonl \
   --cases runs/gisa_60_001/cases.jsonl \
@@ -110,7 +113,7 @@ uv run python -m banso_eval.score runs/gisa_60_001/results.jsonl \
 
 中断后使用相同命令加 `--resume`，跳过所有已记录题目（包括失败），不自动重试。启动前检查选题与运行参数是否一致；不要同时向同一目录运行两个进程。若结果末行因异常关机损坏，会拒绝续跑，需先检查并移走不完整末行。续跑仍需自行保持插件版本和环境配置一致；当前未实现与旧 Banso 等价的研究预算或整题超时。
 
-评分采用原项目的纯离线逻辑，兼容新 `id` 和旧 `case_id`；以选题全集为分母，缺失和失败预测按零分计入，重复或额外 ID 报错。输出目录必须不存在，避免覆盖历史评分。可用旧 `results.jsonl` 路径重新评分旧预测，对齐当前标准答案；不会修改原项目。评分默认使用同一份 `cases_60.jsonl`，可用 `--cases` 指定运行目录内的 `cases.jsonl` 快照；`--answer-dir` 指定标准答案目录。批量和评分均支持 `--source` 指定数据版本记录。
+评分采用原项目的纯离线逻辑，兼容新 `id` 和旧 `case_id`；以选题全集为分母，缺失和失败预测按零分计入，重复或额外 ID 报错。输出目录必须不存在，避免覆盖历史评分。可用旧 `results.jsonl` 路径重新评分旧预测，对齐当前标准答案；不会修改原项目。评分默认使用同一份 `cases_60.jsonl`，可用 `--cases` 指定运行目录内的 `cases.jsonl` 快照；`--answer-dir` 指定标准答案目录。评分入口仍支持 `--source` 指定数据版本记录；答题入口从题库目录自动读取。
 
 退出码：批量全部成功 `0`，存在答题失败 `1`，配置／文件错误 `2`，中断 `130`；评分正常执行为 `0`，错误为 `2`，分数低不影响退出码。
 
@@ -132,6 +135,6 @@ result = answer_case(harness, {
 uv run pytest
 ```
 
-54 项本地测试已通过，使用模拟 SDK 验证答题、批量续跑和离线评分。两组旧 60 题预测已用当前标准答案重评，120 条逐题评分均与旧记录一致。SDK `0.1.5rc1` + DSH `0.2.0-rc.2` 的独立安装及搜索／阅读链路已人工验证；另用一道自建 `item` 题验证了搜索、阅读、证据提取、最终 JSON 和 TSV 转换。`set/list/table` 尚未在线验收，尚未对当前 DSH 运行正式测评。
+58 项本地测试已通过，使用模拟 SDK 验证答题、批量续跑和离线评分。两组旧 60 题预测已用当前标准答案重评，120 条逐题评分均与旧记录一致。SDK `0.1.5rc1` + DSH `0.2.0-rc.2` 的独立安装及搜索／阅读链路已人工验证；另用一道自建 `item` 题验证了搜索、阅读、证据提取、最终 JSON 和 TSV 转换。`set/list/table` 尚未在线验收，尚未对当前 DSH 运行正式测评。
 
 `pyproject.toml` 和 `uv.lock` 纳入版本管理；`.venv/`、缓存、`.env` 和 `runs/` 不提交。
