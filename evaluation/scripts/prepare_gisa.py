@@ -1,7 +1,21 @@
-"""Decrypt and validate a local copy of the GISA benchmark questions.
+"""解密并校验 GISA 题库，仅使用 Python 标准库，不调用模型。
 
-Adapted from BansoAgain scripts/prepare_gisa.py; standard library only.
-Run from evaluation/: uv run python scripts/prepare_gisa.py
+沿用 BansoAgain scripts/prepare_gisa.py 的解密与校验逻辑。
+以下命令均在 evaluation/ 目录执行。
+
+准备全量题目（默认输出 data/gisa/derived/questions.jsonl）：
+    uv run python scripts/prepare_gisa.py
+
+按旧 Banso 的 60 个题目 ID 准备子集：
+    uv run python scripts/prepare_gisa.py --selection scripts/banso_60.json --output data/gisa/derived/cases_60.jsonl
+
+默认输入为 data/gisa/raw/ 下的 encrypted_question.jsonl、answer/、trace/。
+可通过 --input、--answer-dir、--trace-dir 覆盖这些路径。
+--selection 读取 selected_case_ids，并按清单顺序输出；准备子集时必须显式指定
+--output，避免覆盖全量题目文件。输出路径已存在时会覆盖该文件。
+
+输出为每行一道题的 JSONL，仅包含题目及元数据，不含标准答案或 canary。
+脚本检查题目字段及答案、参考轨迹的文件 ID；不创建 runs/ 测评目录。
 """
 
 import argparse
@@ -23,12 +37,18 @@ QUESTION_TYPES = {"stable", "live"}
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--answer-dir", type=Path, default=DEFAULT_ANSWER_DIR)
     parser.add_argument("--trace-dir", type=Path, default=DEFAULT_TRACE_DIR)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    return parser.parse_args()
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--selection", type=Path, help="Optional JSON containing selected_case_ids; use --output for the subset path")
+    args = parser.parse_args()
+    if args.selection is not None and args.output is None:
+        parser.error("--selection requires an explicit --output for the subset")
+    if args.output is None:
+        args.output = DEFAULT_OUTPUT
+    return args
 
 
 def derive_key(password: str, length: int) -> bytes:
@@ -147,9 +167,24 @@ def write_questions(path: Path, questions: list[dict[str, Any]]) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def select_questions(questions: list[dict[str, Any]], selection: Path) -> list[dict[str, Any]]:
+    ids = json.loads(selection.read_text(encoding="utf-8"))["selected_case_ids"]
+    if not isinstance(ids, list) or not ids or any(type(i) is not int or i < 0 for i in ids):
+        raise ValueError("Selected IDs must be non-negative integers")
+    if len(set(ids)) != len(ids):
+        raise ValueError("Duplicate selected IDs")
+    indexed = {question["id"]: question for question in questions}
+    missing = set(ids) - indexed.keys()
+    if missing:
+        raise ValueError(f"Missing question IDs: {sorted(missing)}")
+    return [indexed[i] for i in ids]
+
+
 def main(args: argparse.Namespace) -> None:
     questions = load_questions(args.input)
     validate_assets(questions, args.answer_dir, args.trace_dir)
+    if args.selection is not None:
+        questions = select_questions(questions, args.selection)
     write_questions(args.output, questions)
 
     answer_counts = Counter(question["answer_type"] for question in questions)

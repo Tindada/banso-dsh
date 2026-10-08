@@ -1,1 +1,1 @@
-"""Single-case benchmark answering through the DSH Python SDK."""
+"""GISA preparation, SDK answering and independent offline scoring."""

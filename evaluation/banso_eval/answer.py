@@ -1,17 +1,12 @@
 """Answer one GISA case: SDK research, validated JSON, deterministic TSV."""
 
-import argparse
 import json
-import os
-import sys
 import time
 import uuid
-from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Literal
 
 from deepseek_harness import DeepSeekHarness
-from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .gisa_format import AnswerType, build_prompt, parse_and_render
@@ -115,75 +110,3 @@ def answer_case(
         finish_reason=finish_reason, elapsed_seconds=time.monotonic() - started,
         error=error,
     )
-
-
-def _close_harness(harness: DeepSeekHarness) -> None:
-    try:
-        with redirect_stdout(sys.stderr):
-            harness.close()
-    except Exception as exc:
-        print(f"SDK shutdown warning: {exc}", file=sys.stderr)
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, help="Single case JSON file, or - for stdin")
-    parser.add_argument("--dsh-bin", required=True, type=Path)
-    parser.add_argument("--dsh-home", required=True, type=Path)
-    parser.add_argument("--env-file", type=Path)
-    parser.add_argument("--profile", default="banso-dsh")
-    parser.add_argument("--model")
-    parser.add_argument("--cwd", type=Path, default=Path.cwd())
-    parser.add_argument("--runs-dir", type=Path, default=Path("runs"))
-    args = parser.parse_args(argv)
-    harness = None
-    try:
-        text = sys.stdin.read() if args.input == "-" else Path(args.input).read_text(encoding="utf-8")
-        case = GisaCase.model_validate_json(text)
-        dsh_bin = args.dsh_bin.expanduser().resolve()
-        dsh_home = args.dsh_home.expanduser().resolve()
-        cwd = args.cwd.expanduser().resolve()
-        if not dsh_bin.is_file() or not os.access(dsh_bin, os.X_OK):
-            raise ValueError(f"DSH executable is missing or not executable: {dsh_bin}")
-        if not cwd.is_dir():
-            raise ValueError(f"Working directory not found: {cwd}")
-        if not args.profile or Path(args.profile).name != args.profile or args.profile in {".", ".."}:
-            raise ValueError("profile must be a single directory name")
-        if not (dsh_home / "profiles" / args.profile / "package.json").is_file():
-            raise ValueError(f"Profile not installed in {dsh_home}: {args.profile}")
-        env = {}
-        if args.env_file is not None:
-            env_file = args.env_file.expanduser().resolve()
-            if not env_file.is_file():
-                raise ValueError(f"Environment file not found: {env_file}")
-            env = {key: value for key, value in dotenv_values(env_file).items() if value is not None}
-        model = args.model or env.get("DSH_MODEL") or os.getenv("DSH_MODEL") or "deepseek-v4-flash"
-        with redirect_stdout(sys.stderr):
-            harness = DeepSeekHarness(
-                dsh_bin=str(dsh_bin), dsh_home=str(dsh_home), profile=args.profile,
-                cwd=str(cwd), runtime_cwd=str(cwd), model=model, env=env,
-            )
-            harness.start()
-    except (KeyboardInterrupt, SystemExit):
-        if harness is not None:
-            _close_harness(harness)
-        raise
-    except Exception as exc:
-        # Startup/configuration failures do not represent an attempted question.
-        print(f"Configuration/startup error: {exc}", file=sys.stderr)
-        if harness is not None:
-            _close_harness(harness)
-        return 2
-
-    try:
-        print(f"Answering GISA {case.id} ({case.answer_type.value})", file=sys.stderr)
-        with redirect_stdout(sys.stderr):
-            result = answer_case(harness, case, runs_dir=args.runs_dir.expanduser().resolve())
-    finally:
-        _close_harness(harness)
-    print(result.model_dump_json())
-    return 0 if result.status == "ok" else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
