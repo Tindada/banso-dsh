@@ -2,6 +2,18 @@
 
 通过 Python SDK 调用 Banso DSH，每题使用独立会话。研究结束后校验 JSON，转换为 GISA TSV；选题和评分由测评端负责，不自动重试或修复答案。
 
+## 准备正式题库
+
+将官方 `RUC-NLPIR/GISA` 数据下载到 `data/gisa/raw/` 后，在本目录执行：
+
+```sh
+uv run python scripts/prepare_gisa.py
+```
+
+脚本沿用 BansoAgain 的解密和校验逻辑，仅依赖标准库；检查题目字段及答案、参考轨迹的文件 ID，输出 `data/gisa/derived/questions.jsonl`（每行一道题，不含标准答案）。可用 `--input`、`--answer-dir`、`--trace-dir`、`--output` 覆盖路径。答题入口需从中选择单个对象作为输入。
+
+`data/gisa/source.json` 记录本地下载版本；数据放在 `data/`，测评输出放在 `runs/`，均不提交。
+
 ## 运行
 
 需要 Python 3.12+、uv，以及已安装的 DSH 和 Banso profile。在本目录执行：
@@ -81,6 +93,6 @@ result = answer_case(harness, {
 uv run pytest
 ```
 
-39 项本地测试使用模拟 SDK并已通过。SDK `0.1.5rc1` + DSH `0.2.0-rc.2` 的独立安装及搜索／阅读链路已人工验证；另用一道自建 `item` 题验证了搜索、阅读、证据提取、最终 JSON 和 TSV 转换。`set/list/table` 尚未在线验收，正式 GISA 题库及标准答案尚未准备，未进行正式评分。
+39 项本地测试使用模拟 SDK并已通过。SDK `0.1.5rc1` + DSH `0.2.0-rc.2` 的独立安装及搜索／阅读链路已人工验证；另用一道自建 `item` 题验证了搜索、阅读、证据提取、最终 JSON 和 TSV 转换。`set/list/table` 尚未在线验收，未进行正式评分。
 
 `pyproject.toml` 和 `uv.lock` 纳入版本管理；`.venv/`、缓存、`.env` 和 `runs/` 不提交。
