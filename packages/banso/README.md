@@ -8,7 +8,20 @@
 
 同时加载 [会话资料插件](../materials/README.md)，从现有网页工具日志维护可恢复的资料集合。资料通过每步更新的快照进入模型上下文，旧快照被简短占位替代，`web_read` 使用单个 `target` 接受资料 handle 或完整 URL，并要求 `focus` 指定提取目标。另加载 [网页工具](../tool-web/README.md)，search／read 向模型返回简短回执；read 按 focus 提取证据，全文只保存供后续复用，快照展示证据。组合关闭原生 fetch 工具，并加载 DSH 工具超时策略。
 
-## 安装与构建
+## 从 npm 安装
+
+无需 DSH 源码。安装 Node.js 24 和 pnpm 后，在空目录执行：
+
+```sh
+pnpm add @deepseek-ai/dsh@0.2.0-rc.2
+pnpm exec dsh plugin --profile banso-dsh add banso-dsh@0.1.0
+pnpm exec dsh plugin --profile banso-dsh exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh"]'
+pnpm exec dsh --profile banso-dsh --dump-config
+```
+
+若安装 DSH 时提示构建脚本被拦截，先运行 `pnpm approve-builds`；若安装 profile 时提示 `koffi` 被拦截，运行 `pnpm exec dsh plugin --profile banso-dsh exec pnpm approve-builds` 并批准。profile 的 missing peer 提示需结合 DSH 宿主解析机制判断，不要逐个补装。完整的密钥配置和 Python SDK 示例见仓库根目录 [README](../../README.md)。
+
+## 源码开发与构建
 
 使用 Node.js 24 和 pnpm 12.8.1，在仓库根目录执行：
 
@@ -20,7 +33,7 @@ pnpm build
 
 构建会编译 Tavily、Jina、提示词、网页工具和资料插件，并将基础包的配置复制为 `base.patch.yml`。该文件不提交 Git；基础配置或插件源码变更后需重新构建。锁文件已同步时，可用 `pnpm install --frozen-lockfile` 安装。
 
-## 创建与运行 profile
+## 源码链接方式创建 profile
 
 在 DSH 源码仓库目录执行，替换绝对路径。以下命令用于专用的 `banso-dsh` profile：
 
