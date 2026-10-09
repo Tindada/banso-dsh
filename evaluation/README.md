@@ -77,7 +77,7 @@ uv run python -m banso_eval.batch \
 | `set`、`list` | `{"items": ["A", "B"]}` |
 | `table` | `{"columns": ["Name", "Year"], "rows": [["A", "2025"]]}` |
 
-格式逻辑来自 BansoAgain：集合去重，列表保留顺序和重复项，表格检查列名和行宽。仅接受完整 JSON，不从 Markdown 或解释性文字中猜测答案。
+格式逻辑来自 BansoAgain：集合去重，列表保留顺序和重复项，表格检查列名和行宽。解析从回复中第一个 `{` 开始的 JSON 对象，允许前后说明文字及 Markdown 围栏；首个对象无效时直接失败，不尝试后续对象，也不修补字段。`raw_answer` 保留完整原文。
 
 每题结果追加到运行目录的 `results.jsonl`，包含 `id`、`answer_type`、`status`、`prediction`，以及原始回复、session ID、结束原因、耗时和错误信息。`prediction` 成功时为 TSV 代码块，失败时为 `null`。
 

@@ -56,11 +56,19 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict:
 
 
 def parse_and_render(answer_type: AnswerType, content: str) -> str:
-    """Validate an entire JSON reply and render an official-style TSV block."""
+    """Decode the first JSON object, validate it, and render a TSV block.
+
+    Start at the first opening brace and ignore surrounding prose or fences.
+    Never skip an invalid first object to look for a later valid answer.
+    """
     answer_type = AnswerType(answer_type)
-    value = json.loads(
-        content, parse_constant=_reject_constant, object_pairs_hook=_unique_object
+    start = content.find("{")
+    if start < 0:
+        raise ValueError("No JSON object found in final answer")
+    decoder = json.JSONDecoder(
+        parse_constant=_reject_constant, object_pairs_hook=_unique_object
     )
+    value, _ = decoder.raw_decode(content, start)
     if answer_type == AnswerType.ITEM:
         output = ItemOutput.model_validate(value)
         headers, rows = ["Value"], [[output.value]]

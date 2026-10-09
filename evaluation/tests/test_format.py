@@ -28,8 +28,9 @@ def test_cells_roundtrip_through_csv_quoting():
 
 
 @pytest.mark.parametrize("kind,raw", [
-    ("item", '```json\n{"value":"A"}\n```'),
-    ("item", 'Explanation: {"value":"A"}'),
+    ("item", 'No JSON here'),
+    ("item", '{"value": } {"value":"A"}'),
+    ("item", '{"wrong":"A"} {"value":"A"}'),
     ("item", '{"value":"A","extra":1}'),
     ("item", '{"value":" "}'),
     ("item", '{"value":null}'),
@@ -46,6 +47,22 @@ def test_cells_roundtrip_through_csv_quoting():
 def test_invalid_answers_are_not_repaired(kind, raw):
     with pytest.raises(ValueError):
         parse_and_render(AnswerType(kind), raw)
+
+
+@pytest.mark.parametrize("raw", [
+    '```json\n{"value":"A"}\n```',
+    'Explanation: {"value":"A"}\nTrailing explanation.',
+    '{"value":"A"} {"value":"B"}',
+])
+def test_first_json_object_with_surrounding_text(raw):
+    assert parse_and_render(AnswerType.ITEM, raw) == "```tsv\nValue\nA\n```"
+
+
+def test_first_object_handles_nested_values_and_braces_in_strings():
+    raw = 'Answer:\n```json\n{"columns":["Text"],"rows":[["a } { \\\"quote\\\""]]}\n```'
+    result = parse_and_render(AnswerType.TABLE, raw)
+    rows = list(csv.reader(StringIO(result[len("```tsv\n"):-3]), delimiter="\t"))
+    assert rows == [["Text"], ['a } { "quote"']]
 
 
 def test_prompt_preserves_question_and_does_not_contain_ground_truth():
