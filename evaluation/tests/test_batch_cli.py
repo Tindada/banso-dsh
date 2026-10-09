@@ -83,6 +83,31 @@ def test_cli_uses_fixed_env_and_working_directory(cli, tmp_path, monkeypatch, ca
     assert options["cwd"] == options["runtime_cwd"] == str(tmp_path)
 
 
+@pytest.mark.parametrize("effort", [None, "off", "low", "high", "max"])
+def test_reasoning_effort_config(cli, tmp_path, monkeypatch, effort):
+    args, _, options = cli
+    monkeypatch.setenv("EVAL_DSH_REASONING_EFFORT", "max")
+    if effort is not None:
+        env = tmp_path / ".env"
+        env.write_text(env.read_text() + f"EVAL_DSH_REASONING_EFFORT={effort}\n")
+    assert batch.main(args) == 0
+    expected = effort if effort is not None else "high"
+    assert options["reasoning_effort"] == expected
+    manifest = json.loads((tmp_path / "runs" / "manifest.json").read_text())
+    assert manifest["runtime"]["reasoning_effort"] == expected
+
+
+@pytest.mark.parametrize("effort", ["medium", ""])
+def test_invalid_reasoning_effort_before_sdk(cli, tmp_path, capsys, effort):
+    args, _, options = cli
+    env = tmp_path / ".env"
+    env.write_text(env.read_text() + f"EVAL_DSH_REASONING_EFFORT={effort}\n")
+    assert batch.main(args) == 2
+    assert options == {}
+    assert not (tmp_path / "runs").exists()
+    assert "EVAL_DSH_REASONING_EFFORT" in capsys.readouterr().err
+
+
 def test_startup_failure_is_configuration_error_and_closes_sdk(cli, capsys):
     args, harness, _ = cli
     def fail():

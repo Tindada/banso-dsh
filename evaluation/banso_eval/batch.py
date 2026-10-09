@@ -43,6 +43,9 @@ def runtime_options() -> dict:
     dsh_home = evaluation_path(Path(env["EVAL_DSH_HOME"]))
     profile = env.get("EVAL_DSH_PROFILE", "banso-dsh")
     model = env.get("EVAL_DSH_MODEL", "deepseek-flash").strip()
+    reasoning_effort = env.get("EVAL_DSH_REASONING_EFFORT", "high").strip()
+    if reasoning_effort not in {"off", "low", "high", "max"}:
+        raise ValueError("EVAL_DSH_REASONING_EFFORT must be off, low, high, or max")
     if not dsh_bin.is_file() or not os.access(dsh_bin, os.X_OK):
         raise ValueError(f"DSH executable is missing or not executable: {dsh_bin}")
     if not profile or Path(profile).name != profile or profile in {".", ".."}:
@@ -52,7 +55,8 @@ def runtime_options() -> dict:
     if not model:
         raise ValueError("Model must not be blank")
     return dict(dsh_bin=str(dsh_bin), dsh_home=str(dsh_home), profile=profile,
-                cwd=str(EVALUATION_DIR), runtime_cwd=str(EVALUATION_DIR), model=model, env=env)
+                cwd=str(EVALUATION_DIR), runtime_cwd=str(EVALUATION_DIR), model=model,
+                reasoning_effort=reasoning_effort, env=env)
 
 
 
