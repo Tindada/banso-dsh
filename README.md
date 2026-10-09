@@ -124,4 +124,4 @@ SDK 会自动启动和关闭 DSH，正常结束时输出 `completed` 和回答�
 - [GISA 测评](evaluation/README.md)
 - [项目规划与验证范围](docs/plan.md)
 
-本项目独立维护，非 DeepSeek 官方发行包。基础配置的 MIT 许可见 [LICENSE](packages/base/LICENSE)，入口包随附上游许可声明。
+本项目独立维护，非 DeepSeek 官方发行包。原创代码采用 [MIT 许可证](LICENSE)；DSH 基础配置和 GISA 评分代码保留各自许可，详见[第三方许可说明](THIRD_PARTY_NOTICES.md)。

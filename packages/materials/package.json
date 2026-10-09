@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Session-local research materials derived from web tool events",
   "type": "module",
-  "license": "ISC",
+  "license": "MIT",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "exports": {

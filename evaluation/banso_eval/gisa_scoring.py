@@ -3,6 +3,10 @@
 ``SimpleEvaluator`` is adapted from the official GISA evaluator, licensed
 under Apache-2.0:
 https://github.com/RUC-NLPIR/GISA/blob/main/eval_script/run_evaluation.py
+
+Modified via BansoAgain for standalone offline scoring, typed inputs and
+results, and local error handling. This module remains under Apache-2.0;
+see ../../licenses/GISA-Apache-2.0.txt and ../../THIRD_PARTY_NOTICES.md.
 """
 
 import difflib
@@ -279,4 +283,3 @@ def summarize_gisa_scores(scores: Sequence[GisaCaseScore]) -> dict[str, object]:
             },
         }
     return summary
-

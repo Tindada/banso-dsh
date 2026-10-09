@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Banso research instructions and per-turn reference time",
   "type": "module",
-  "license": "ISC",
+  "license": "MIT",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "exports": {
