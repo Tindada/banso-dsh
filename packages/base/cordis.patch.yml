@@ -1,3 +1,6 @@
+# Adapted from DeepSeek Harness: packages/bundle/sdk-minimal/cordis.patch.yml.
+# Copyright (c) 2026 DeepSeek. Licensed under MIT.
+# See LICENSE in banso-dsh-base or THIRD_PARTY_NOTICES.md in banso-dsh.
 # Standalone minimal SDK application. Unlike the ordinary SDK profile, this
 # bundle does not layer over dsh-base: this insert is the complete Cordis tree.
 # User profile, home, and invocation patches still apply above it.

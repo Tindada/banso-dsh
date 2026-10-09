@@ -4,6 +4,10 @@
 
 业务使用见 [Banso bundle](../banso/README.md)；以下步骤用于单独验证基础环境。
 
+## 来源与许可
+
+基础配置改编自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 `packages/bundle/sdk-minimal/cordis.patch.yml`，裁剪了终端、沙箱等服务，停用会话标题，并调整 profile 名称和会话存储目录。本包采用 [MIT 许可证](LICENSE)，保留上游 `Copyright (c) 2026 DeepSeek` 声明。由 Banso 项目独立维护，非 DeepSeek 官方发行包。
+
 ## 独立运行
 
 在本仓库根目录执行 `pnpm install`。然后在 DSH 源码仓库目录执行，替换绝对路径：

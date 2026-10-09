@@ -24,6 +24,7 @@
     "@deepseek-ai/dsh-tool-call-timeout-policy": "0.2.0-rc.2"
   },
   "files": [
+    "THIRD_PARTY_NOTICES.md",
     "base.patch.yml",
     "cordis.patch.yml",
     "scripts/copy-base-patch.mjs"

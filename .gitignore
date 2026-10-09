@@ -1,6 +1,7 @@
 node_modules/
 lib/
 packages/banso/base.patch.yml
+packages/banso/THIRD_PARTY_NOTICES.md
 *.tgz
 .env
 .env.*

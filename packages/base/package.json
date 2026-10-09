@@ -1,10 +1,11 @@
 {
   "name": "banso-dsh-base",
   "version": "0.1.0",
-  "private": true,
   "description": "Minimal standalone SDK runtime bundle for Banso DSH",
   "type": "module",
+  "license": "MIT",
   "files": [
+    "LICENSE",
     "cordis.patch.yml",
     "README.md"
   ],

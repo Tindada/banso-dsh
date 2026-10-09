@@ -4,6 +4,8 @@
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。基础包配置不变。
 
+本包由 Banso 项目独立维护，非 DeepSeek 官方发行包。随包分发的 `base.patch.yml` 改编自 DSH 的 `sdk-minimal` 配置，遵循 MIT；构建和打包时同步生成的 `THIRD_PARTY_NOTICES.md` 保留其完整上游许可声明。
+
 同时加载 [会话资料插件](../materials/README.md)，从现有网页工具日志维护可恢复的资料集合。资料通过每步更新的快照进入模型上下文，旧快照被简短占位替代，`web_read` 使用单个 `target` 接受资料 handle 或完整 URL，并要求 `focus` 指定提取目标。另加载 [网页工具](../tool-web/README.md)，search／read 向模型返回简短回执；read 按 focus 提取证据，全文只保存供后续复用，快照展示证据。组合关闭原生 fetch 工具，并加载 DSH 工具超时策略。
 
 ## 安装与构建
