@@ -47,19 +47,93 @@ async function harness(t) {
   const run = async (target = agent) => { target.followup(user('research')); await target.whenIdle(); assert.deepEqual(errors, []) }
   let count = 0
   // Supply recorded tool facts directly: context tests do not execute a web tool.
-  const recordRead = (text = '提取证据') => {
+  const recordRead = (text = '提取证据', requestUrl = url) => {
     const callId = `fixture-${++count}`
     const call = agent.session.append('tool/call', {
-      name: 'web_read', arguments: JSON.stringify({ target: url, focus: 'facts' }), callId, turn: 0, step: 0,
+      name: 'web_read', arguments: JSON.stringify({ target: requestUrl, focus: 'facts' }), callId, turn: 0, step: 0,
     })
     agent.session.append('tool/result', {
       turn: 0, step: 0,
       message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'Fixture receipt' }], isError: false }),
-      meta: { requestUrl: url, focus: 'facts', finalUrl: url + '/final', truncated: true, content: '正文完整保留', evidence: text },
+      meta: { requestUrl, focus: 'facts', finalUrl: requestUrl + '/final', truncated: true, content: '正文完整保留', evidence: text },
     }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   }
-  return { ctx, agent, adapter, fiber, run, recordRead }
+  const executeHide = args => ctx.tools.execute({
+    agent, name: 'materials_hide', arguments: args, callId: `hide-${++count}`, signal: new AbortController().signal,
+  })
+  const recordHide = async handles => {
+    const callId = `fixture-${++count}`
+    const call = agent.session.append('tool/call', {
+      name: 'materials_hide', arguments: JSON.stringify({ handles }), callId, turn: 0, step: 0,
+    })
+    const result = await ctx.tools.execute({
+      agent, name: 'materials_hide', arguments: { handles }, callId, signal: new AbortController().signal,
+    })
+    assert.equal(result.isError, false, textOf(result))
+    agent.session.append('tool/result', {
+      turn: 0, step: 0,
+      message: createToolResultMessage({ callId, content: result.content, isError: result.isError }),
+      meta: result.meta,
+    }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
+  }
+  return { ctx, agent, adapter, fiber, run, recordRead, executeHide, recordHide }
 }
+
+test('hide classifies and deduplicates handles without changing materials or session messages', async t => {
+  const h = await harness(t)
+  h.recordRead('First')
+  h.recordRead('Second', 'https://example.com/b')
+  await h.recordHide(['S2'])
+  await h.run()
+  const state = () => h.ctx.sessionProjections.stateOf(h.agent.session, 'bansoMaterials')
+  const before = structuredClone(state())
+  const events = structuredClone(h.agent.session.snapshotEvents())
+  const result = await h.executeHide({ handles: ['S99', 'S1', 'S2', 'S1', 'S99', 'S2'] })
+  assert.equal(result.isError, false, textOf(result))
+  assert.deepEqual(result.meta, { hidden: ['S1'], alreadyHidden: ['S2'], unknown: ['S99'] })
+  assert.match(textOf(result), /next materials snapshot/)
+  assert.deepEqual(state(), before)
+  assert.deepEqual(h.agent.session.snapshotEvents(), events)
+})
+
+test('hide rejects missing handles and an empty list', async t => {
+  const h = await harness(t)
+  for (const args of [{}, { handles: [] }]) {
+    const result = await h.executeHide(args)
+    assert.equal(result.isError, true)
+    assert.equal(result.meta, undefined)
+  }
+})
+
+test('snapshots remove hidden materials, replace all-hidden snapshots and show restored materials', async t => {
+  const h = await harness(t)
+  const otherUrl = 'https://example.com/b'
+  h.recordRead('First evidence')
+  h.recordRead('Second evidence', otherUrl)
+  const latest = async () => {
+    await h.run()
+    const messages = h.adapter.requests.at(-1).messages
+    assert.equal(snapshots(messages).length, 1)
+    for (const placeholder of placeholders(messages)) {
+      assert.doesNotMatch(textOf(placeholder), /Material:|First evidence|Second evidence|https:\/\/example.com/)
+    }
+    return textOf(snapshots(messages)[0])
+  }
+  assert.match(await latest(), /First evidence[\s\S]*Second evidence/)
+  await h.recordHide(['S1'])
+  const partial = await latest()
+  assert.doesNotMatch(partial, /Material: S1\b|First evidence|https:\/\/example.com\/a/)
+  assert.match(partial, /Material: S2\b[\s\S]*Second evidence/)
+  assert.ok(placeholders(h.adapter.requests.at(-1).messages).length > 0)
+  await h.recordHide(['S2'])
+  const empty = await latest()
+  assert.match(empty, /no visible materials/i)
+  assert.doesNotMatch(empty, /Material:|First evidence|Second evidence|https:\/\/example.com/)
+  h.recordRead('Restored evidence')
+  const restored = await latest()
+  assert.match(restored, /Material: S1\b[\s\S]*First evidence[\s\S]*Restored evidence/)
+  assert.doesNotMatch(restored, /no visible materials|Material: S2\b|Second evidence|https:\/\/example.com\/b/)
+})
 
 test('rendering is deterministic, numerically ordered and preserves source information', () => {
   const state = materialsProjection.init()

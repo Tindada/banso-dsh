@@ -41,6 +41,12 @@ const fetchedSchema = z.object({
   time: z.number(),
 })
 
+const hideMetaSchema = z.object({
+  hidden: z.array(z.string()),
+  alreadyHidden: z.array(z.string()),
+  unknown: z.array(z.string()),
+})
+
 const evidenceSchema = z.object({
   focus: z.string(),
   text: z.string(),
@@ -49,6 +55,7 @@ const evidenceSchema = z.object({
 
 const materialSchema = sourceSchema.extend({
   handle: z.string(),
+  hidden: z.boolean().optional(),
   fetched: fetchedSchema.optional(),
   evidence: z.array(evidenceSchema).optional(),
 })
@@ -60,7 +67,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
   pendingCalls: z.record(
     z.string(),
     z.object({
-      name: z.enum(['web_search', 'web_read']),
+      name: z.enum(['web_search', 'web_read', 'materials_hide']),
       callId: z.string(),
       turn: z.number().int(),
     }),
@@ -69,7 +76,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
 
 function trackCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
   const { name, callId, turn } = event.data
-  if (name !== 'web_search' && name !== 'web_read') return undefined
+  if (name !== 'web_search' && name !== 'web_read' && name !== 'materials_hide') return undefined
 
   return { name, callId, turn }
 }
@@ -126,7 +133,7 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     if (!parsed.success) return next
 
     for (const source of parsed.data.sources) {
-      upsert(next, source.url, item => ({ ...item, ...source }))
+      upsert(next, source.url, item => ({ ...item, ...source, hidden: false }))
     }
     return next
   }
@@ -139,12 +146,13 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     const { requestUrl, focus, content, finalUrl, truncated, evidence } = parsed.data
     if (content !== undefined && (finalUrl === undefined || truncated === undefined)) return next
     upsert(next, requestUrl, item => {
+      const visible = { ...item, hidden: false }
       const updated = content !== undefined
         ? {
-            ...item,
+            ...visible,
             fetched: { content, finalUrl: finalUrl!, truncated: truncated!, time: event.time },
           }
-        : item
+        : visible
       if (!evidence?.trim()) return updated
       return {
         ...updated,
@@ -154,6 +162,15 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
         ],
       }
     })
+  }
+  if (call.name === 'materials_hide') {
+    if (event.data.message.isError) return next
+    const parsed = hideMetaSchema.safeParse(event.data.meta)
+    if (!parsed.success) return next
+    for (const handle of parsed.data.hidden) {
+      const item = Object.hasOwn(next.items, handle) ? next.items[handle] : undefined
+      if (item !== undefined && item.hidden !== true) next.items[handle] = { ...item, hidden: true }
+    }
   }
   return next
 }

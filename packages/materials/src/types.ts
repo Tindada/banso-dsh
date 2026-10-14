@@ -13,6 +13,7 @@ export interface Evidence {
 
 export interface Material {
   handle: string
+  hidden?: boolean | undefined
   url: string
   title?: string | undefined
   snippet?: string | undefined
@@ -22,7 +23,7 @@ export interface Material {
 }
 
 export interface PendingCall {
-  name: 'web_search' | 'web_read'
+  name: 'web_search' | 'web_read' | 'materials_hide'
   callId: string
   turn: number
 }

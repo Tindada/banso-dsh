@@ -28,6 +28,50 @@ const page = { finalUrl: B, truncated: true, content: 'Full body' }
 const success = (requestUrl = A, focus = 'facts') => ({ requestUrl, focus, ...page, evidence: 'Evidence' })
 const reused = (focus = 'facts') => ({ requestUrl: A, focus, evidence: 'Evidence' })
 
+test('hide commits only visibility changes and rejects malformed metadata atomically', () => {
+  const f = fixture()
+  f.result(f.read(), success())
+  f.result(f.read(B), success(B))
+  const before = structuredClone(f.state)
+  f.result(f.call('materials_hide', { handles: ['S1'] }), {
+    hidden: ['S1', 42], alreadyHidden: [], unknown: [],
+  })
+  assert.deepEqual(f.state, before)
+  f.result(f.call('materials_hide', { handles: ['S1', 'S99'] }), {
+    hidden: ['S1'], alreadyHidden: [], unknown: ['S99'],
+  })
+  assert.deepEqual(f.state, {
+    ...before,
+    items: { ...before.items, S1: { ...before.items.S1, hidden: true } },
+  })
+})
+
+test('search and normal read outcomes restore hidden materials, but tool errors do not', () => {
+  const cases = [
+    { label: 'same URL search', name: 'web_search', meta: search([{ url: A, title: 'Updated' }]) },
+    { label: 'saved page read', name: 'web_read', meta: reused('new focus') },
+    { label: 'fetch failure', name: 'web_read', meta: { requestUrl: A, focus: 'facts', error: 'Fetch failed: HTTP 503' } },
+    { label: 'extraction failure', name: 'web_read', meta: { requestUrl: A, focus: 'facts', error: 'Extraction failed: invalid JSON' } },
+    { label: 'tool error', name: 'web_read', meta: undefined, isError: true },
+  ]
+  for (const { label, name, meta, isError = false } of cases) {
+    const f = fixture()
+    f.result(f.read(), success())
+    f.result(f.call('materials_hide', { handles: ['S1'] }), { hidden: ['S1'], alreadyHidden: [], unknown: [] })
+    const saved = structuredClone(f.state)
+    f.result(f.call(name, name === 'web_read' ? { target: 'S1', focus: 'facts' } : { queries: ['q'] }), meta, { isError })
+    assert.equal(f.state.items.S1.hidden, isError, label)
+    assert.deepEqual(f.state.urlIndex, saved.urlIndex, label)
+    assert.equal(f.state.nextHandle, saved.nextHandle, label)
+    assert.equal(f.state.items.S1.handle, 'S1', label)
+    assert.deepEqual(f.state.items.S1.fetched, saved.items.S1.fetched, label)
+    assert.deepEqual(f.state.items.S1.evidence.slice(0, saved.items.S1.evidence.length), saved.items.S1.evidence, label)
+    if (name === 'web_search') assert.equal(f.state.items.S1.title, 'Updated')
+    if (label === 'saved page read') assert.equal(f.state.items.S1.evidence.at(-1).focus, 'new focus')
+    if (isError) assert.deepEqual(f.state.items, saved.items)
+  }
+})
+
 test('search deduplicates exact URLs and retains body and evidence across turns', () => {
   const f = fixture()
   f.result(f.call(), search([{ url: A, title: 'First', snippet: 'Summary' }, { url: A }, { url: B }]))
