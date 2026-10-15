@@ -17,3 +17,35 @@ test('groups interleaved live chunks by attempt, and renders the settled event w
   const settled = entry('assistant/message', { message: { content: [{ type: 'text', text: 'AC' }] } }, 5);
   assert.deepEqual(messagesOf([settled]).map(m => m.text), ['AC']);
 });
+
+const streaming = (attemptId, text, turn, step, seq) => {
+  const row = live(attemptId, text);
+  row.event.seq = seq;
+  Object.assign(row.event.data, { turn, step });
+  return row;
+};
+const committed = (text, turn, step, seq) => entry('assistant/message', { turn, step, message: { content: [{ type: 'text', text }] } }, seq);
+test('tool preamble stays live once during tools and disappears when live rows retire', () => {
+  const chunks = [streaming('a', 'Reading', 1, 2, 4.5), streaming('a', ' now', 1, 2, 4.75)];
+  assert.deepEqual(messagesOf(chunks).map(m => m.text), ['Reading now']);
+  const durable = committed('Reading now', 1, 2, 5);
+  durable.event.data.message.content.push({ type: 'tool-call', id: 'read', name: 'web_read', arguments: '{}' });
+  const tool = entry('tool/call', { turn: 1, step: 2, callId: 'read', name: 'web_read', arguments: '{}' }, 6);
+  const duringTool = messagesOf([...chunks, durable, tool]);
+  assert.deepEqual(duringTool.map(m => m.text), ['Reading now']);
+  assert.equal(duringTool[0].id, 'live-a');
+  assert.deepEqual(messagesOf([durable, tool]), []);
+  assert.deepEqual(messagesOf([durable, tool, committed('Final answer', 1, 3, 9)]).map(m => m.text), ['Final answer']);
+});
+test('same text in separate steps or turns remains; later attempts are not hidden', () => {
+  const entries = [committed('same', 1, 1, 3), committed('same', 1, 2, 6), streaming('next', 'same', 2, 1, 8.5)];
+  assert.deepEqual(messagesOf(entries).map(m => m.text), ['same', 'same', 'same']);
+  assert.deepEqual(messagesOf([committed('before', 1, 1, 3), streaming('later', 'after', 1, 1, 4.5)]).map(m => m.text), ['before', 'after']);
+});
+
+test('ordinary final answer replaces live text once and persists after retirement', () => {
+  const chunk = streaming('final', 'Answer', 1, 3, 8.5);
+  const durable = committed('Answer', 1, 3, 9);
+  assert.deepEqual(messagesOf([chunk, durable]).map(m => m.text), ['Answer']);
+  assert.deepEqual(messagesOf([chunk, durable]), messagesOf([durable]));
+});

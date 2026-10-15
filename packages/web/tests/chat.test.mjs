@@ -21,6 +21,10 @@ async function fixture(t) {
   await symlink(join(root, 'packages/banso'), join(profile, 'node_modules/banso-dsh'));
   await symlink(join(root, 'packages/web'), join(profile, 'node_modules/banso-dsh-web'));
   await writeFile(join(profile, 'cordis.patch.yml'), `
+- id: web
+  config:
+    searchProvider: fixture
+    fetchProvider: fixture
 - id: llm-deepseek
   disabled: true
 - id: llm-retry
@@ -96,6 +100,41 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     await ask('recovered');
     await page.locator('.assistant').filter({ hasText: '回答：recovered' }).waitFor();
     await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    await ask('tools');
+    await page.locator('.banso-tool.running').filter({ hasText: '正在搜索' }).waitFor();
+    assert.equal(await page.locator('.assistant').filter({ hasText: '我来搜索相关来源。' }).count(), 1);
+    await page.waitForFunction(() => document.querySelectorAll('.banso-tool.running').length === 2);
+    assert.equal(await page.locator('.assistant').filter({ hasText: '我找到了相关来源，现在开始阅读。' }).count(), 1);
+    await page.locator('.banso-tool.completed').filter({ hasText: '返回 2 个来源' }).waitFor();
+    await page.locator('.banso-tool.failed').filter({ hasText: '内容提取达到输出上限' }).waitFor();
+    assert.equal(await page.locator('.banso-tool').count(), 3);
+    assert.equal(await page.locator('.banso-tool.completed').count(), 2);
+    const failed = page.locator('.banso-tool.failed');
+    assert.equal(await failed.getAttribute('open'), null);
+    await failed.locator('summary').click();
+    assert.match(await failed.innerText(), /Extraction failed:/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await mkdir(join(root, 'packages/web/lib'), { recursive: true });
+    await failed.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: join(root, 'packages/web/lib/tool-status-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    assert.equal(await page.locator('.assistant').filter({ hasText: '我找到了相关来源，现在开始阅读。' }).count(), 0);
+    assert.equal(await page.locator('.assistant').filter({ hasText: '回答：tools' }).count(), 1);
+    assert.equal(await page.locator('.assistant').filter({ hasText: '我来搜索相关来源。' }).count(), 0);
+    assert.equal(await page.locator('.banso-tool').count(), 0);
+    await ask('cancel-tools');
+    await page.waitForFunction(() => document.querySelectorAll('.banso-tool.running').length === 2);
+    await page.getByRole('button', { name: '停止', exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    assert.equal(await page.locator('.assistant').filter({ hasText: '我找到了相关来源，现在开始阅读。' }).count(), 0);
+    assert.equal(await page.locator('.banso-tool').count(), 0);
+    await ask('error-tools');
+    await page.locator('.banso-tool.running').waitFor();
+    await page.getByRole('alert').filter({ hasText: 'fixture after tools failure' }).waitFor();
+    await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    assert.equal(await page.locator('.banso-tool').count(), 0);
     await page.reload();
     await input.waitFor();
     assert.equal(await page.locator('.banso-message').count(), 0);
@@ -107,6 +146,7 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     await page.screenshot({ path: join(root, 'packages/web/lib/chat-smoke.png'), fullPage: true });
     assert.deepEqual(errors, []);
   } catch (error) {
+    await page.locator('details').evaluateAll(nodes => nodes.forEach(node => { node.open = true; }));
     throw new Error(`${error}\nBrowser: ${await page.locator('body').innerText()}\nPage errors: ${errors.join('\n')}\nHost: ${output}`);
   }
 });
