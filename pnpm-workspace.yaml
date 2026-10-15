@@ -4,6 +4,12 @@ packages:
 # The minimal SDK bundle's native dependency build permission.
 allowBuilds:
   koffi: true
+  esbuild: true
+  # CLI dependencies for features not used by the minimal Web profile.
+  '@deepseek-ai/dsh-subprocess-local': false
+  '@google/genai': false
+  node-pty: false
+  protobufjs: false
 
 # dsh-llm's public declarations import attachment types, but this release
 # lists dsh-attachment only as a development dependency.

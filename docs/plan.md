@@ -30,6 +30,18 @@ workspace 构建、类型检查及 44 项本地测试已通过。功能包验证
 
 [BansoAgain 原实现梳理](banso-original.md) 已完成源码对照，区分代码约束、提示词要求和现有局限；尚未运行原项目测试或在线评测。
 
+## 最小 Web 聊天
+
+2026-10-15 新增 `web`、`ui` 两个未发布包。`banso-web` profile 按顺序加载 `banso-dsh` 和 `banso-dsh-web`，由后者停用 SDK 启动和 stdio 插件，追加官方通信、会话接口及依赖；`base/`、`banso/` 源码不变。复用已发布 DSH 的静态启动壳、renderer、ui-session 作用域适配及浏览器会话对象层，自定义根页面提供纯文本聊天、连续追问、流式回答、停止和错误提示。
+
+Web patch 默认选择官方 `deepseek-official` 搜索，加载 `dsh-web-search-deepseek`，搜索超时为 60 秒；阅读仍为 Jina，原 SDK 组合的 Tavily 默认值不变。
+
+不提供历史列表、刷新恢复、工具进度、Markdown 或资料面板。当前会话 ID 只存在页面内存，刷新后首次发送创建新会话；服务端 JSONL 持久化继续保留。刷新/关闭页面不等同于停止任务。
+
+新增验证：消息投影单元测试、真实 DSH CLI + 临时 profile/home + 无头 Chromium 的聊天链路，以及 `--help` 不绑定端口。浏览器测试使用模拟模型，通过真实 HTTP/WebSocket、会话接口和默认 agent loop 验证流式回答、追问、取消、错误后继续聊天和刷新新建；模拟模型还检查 Banso 提示词及研究工具已加载。workspace 构建和类型检查、原有三项 Banso 组合回归测试通过。本机浏览器验证使用已有 Chromium 1208；未验证真实在线模型/搜索服务或全新机器安装。
+
+使用步骤和构建依赖见 [Web 说明](../packages/web/README.md)。
+
 ## 发布状态
 
 2026-10-09 七个包已发布 `0.1.0`。本机独立目录从 npm 安装 DSH 后，仅指定入口包 `banso-dsh@0.1.0`，其余六包自动获取；完成配置合成和 Python SDK 在线验证，一次搜索返回八个来源，两次网页抓取及证据提取成功，正常结束。profile 中需单独批准 koffi 构建；missing peer 提示与 DSH 从宿主解析依赖的设计有关，本次运行未受影响。此验证不使用源码链接或 tarball，但未覆盖全新机器和完整功能。

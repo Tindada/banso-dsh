@@ -1,0 +1,91 @@
+# Apply after banso-dsh. SDK configuration and business packages stay unchanged.
+- id: sdk-app-startup
+  disabled: true
+- id: sdk-jsonrpc-server
+  disabled: true
+# Config patches replace the whole object: preserve Jina and disabled native fetch.
+- id: web
+  config:
+    searchProvider: deepseek-official
+    fetchProvider: jina
+- id: tool-web
+  config:
+    search: true
+    fetch: false
+    searchTimeoutMs: 60000
+- insert:
+    - id: web-search-deepseek
+      name: '@deepseek-ai/dsh-web-search-deepseek'
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+    - id: banso-web-startup
+      name: banso-dsh-web
+    - id: host-webserver
+      name: "@deepseek-ai/dsh-host-webserver"
+      inject: [bansoWebStartup]
+      config:
+        host: 127.0.0.1
+        port: !!js ctx.bansoWebStartup.port
+    - id: host-frontend-static
+      name: "@deepseek-ai/dsh-host-frontend-static"
+      inject: [bansoWebStartup]
+      config:
+        distIndex: !!js ctx.bansoWebStartup.distIndex
+    - id: client-modules
+      name: "@deepseek-ai/dsh-client-modules"
+    - id: client-connection
+      name: "@deepseek-ai/dsh-client-connection"
+    - id: typert-registry
+      name: "@deepseek-ai/dsh-typert-registry"
+    - id: typert-loader
+      name: "@deepseek-ai/dsh-typert-loader"
+    - id: api-gateway
+      name: "@deepseek-ai/dsh-api-gateway"
+    - id: api-remotes
+      name: "@deepseek-ai/dsh-api-remotes"
+    - id: api-session-controller
+      name: "@deepseek-ai/dsh-api-session-controller"
+      config:
+        nativeOpen: false
+    - id: credentials-local
+      name: "@deepseek-ai/dsh-credentials-local"
+    - id: agent-default-model
+      name: "@deepseek-ai/dsh-agent-default-model"
+      config:
+        provider: deepseek-official
+        model: deepseek-flash
+    - id: session-query-sqlite
+      name: "@deepseek-ai/dsh-session-query-sqlite"
+      config:
+        path: ':memory:'
+        openAt: never
+    - id: attachment-local
+      name: "@deepseek-ai/dsh-attachment-local"
+      config:
+        dshHome: !!js dshHomePath('banso-web')
+    - id: client-file-upload
+      name: "@deepseek-ai/dsh-client-file-upload"
+    - id: commands
+      name: "@deepseek-ai/dsh-commands"
+    - id: fs-local
+      name: "@deepseek-ai/dsh-fs-local"
+    - id: file-reference-local
+      name: "@deepseek-ai/dsh-file-reference-local"
+    - id: workspace
+      name: "@deepseek-ai/dsh-workspace"
+    - id: storage
+      name: "@deepseek-ai/dsh-storage"
+    - id: storage-json
+      name: "@deepseek-ai/dsh-storage-json"
+      config:
+        root: !!js dshHomePath('banso-web/storages')
+    - id: storage-domain
+      name: "@deepseek-ai/dsh-storage-domain"
+      config:
+        backend: json
+    - id: client-ui-renderer
+      name: "@deepseek-ai/dsh-client-ui-renderer"
+    - id: client-ui-session
+      name: "@deepseek-ai/dsh-client-ui-session"
+    - id: banso-ui
+      name: banso-dsh-ui

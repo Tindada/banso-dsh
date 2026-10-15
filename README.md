@@ -118,6 +118,12 @@ finally:
 
 SDK 会自动启动和关闭 DSH，正常结束时输出 `completed` 和回答。macOS 长时间运行可使用 `caffeinate -i .venv/bin/python ask.py`，并保持开盖。
 
+## 最小 Web 聊天（源码版）
+
+新增 `banso-dsh-web` 和 `banso-dsh-ui`，支持单会话文字聊天、连续追问、流式回答、停止和错误提示。通过独立 `banso-web` profile 使用，不改变现有 Python SDK 入口。
+
+这两个包尚未发布；源码安装、配置和启动命令见 [Web 使用说明](packages/web/README.md)。首版不支持历史列表、刷新恢复或工具进度，刷新后下一次发送会创建新会话。
+
 ## 更多
 
 - [源码开发与插件说明](packages/banso/README.md)
