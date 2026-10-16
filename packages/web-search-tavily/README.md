@@ -1,6 +1,6 @@
 # Tavily search provider
 
-为 DSH 的 `ctx.web` 提供 Tavily 搜索，复用现有 `web_search`。本包只提供插件，由 `packages/banso` 中的统一 Banso bundle 加载并选用；网页获取继续使用 DSH 自带的 HTTP provider。
+为 DSH 的 `ctx.web` 提供 Tavily 搜索，复用现有 `web_search`。本包只提供插件，由 `banso-dsh` bundle 默认加载并选用。本包不负责网页获取。
 
 接口与依赖对齐 DSH `0.2.0-rc.2`。
 
@@ -23,8 +23,4 @@
     searchDepth: basic
 ```
 
-## 开发与使用
-
-在仓库根目录执行 `pnpm typecheck` 检查类型，`pnpm build` 编译插件。修改源码后需重新构建并重启 DSH。
-
-安装和 profile 操作统一见 [Banso bundle](../banso/README.md)，验证进度见 [迁移规划](../../docs/plan.md)。
+安装与组合见 [Banso bundle](https://github.com/Tindada/banso-dsh/blob/main/packages/banso/README.md)，源码构建见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md)。

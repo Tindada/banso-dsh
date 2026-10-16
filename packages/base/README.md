@@ -1,28 +1,53 @@
 # Banso 基础 SDK bundle
 
-`banso-dsh-base` 源自 try-minimal 实验，以 17 个插件提供默认 `ReactLoopAgent`、DeepSeek 模型调用、SDK 入口、会话持久化、重试及运行时检查。保留工具注册服务，但没有具体工具或 Web UI。纯配置包，无需编译。
+`banso-dsh-base` 提供 DeepSeek 模型调用、默认 agent loop、Python SDK 接入、会话持久化、请求重试和运行时检查。不包含搜索、网页阅读工具或 Web UI。
 
-业务使用见 [Banso bundle](../banso/README.md)；以下步骤用于单独验证基础环境。
+使用完整研究功能请安装 [Banso bundle](https://github.com/Tindada/banso-dsh/blob/main/packages/banso/README.md)，无需额外加载本包。
+
+## 独立使用
+
+在已安装 DSH `0.2.0-rc.2` 的目录执行：
+
+```sh
+pnpm exec dsh plugin --profile banso-base add banso-dsh-base@0.1.0
+pnpm exec dsh plugin --profile banso-base exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh-base"]'
+```
+
+设置 `DEEPSEEK_API_KEY`，在 Python SDK 中选择 `profile="banso-base"`，由 SDK 启动和关闭 DSH。环境准备与 SDK 调用示例见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/README.md)，其中的 profile 替换为 `banso-base`。
+
+## 本包的身份提示词配置
+
+`DSH_SYSTEM_PROMPT` 通过 DSH 进程的启动环境变量传入，也可通过 Python SDK 的 `env` 参数传入。它设置身份提示词前缀（`personaPrefix`），不是替换整个系统提示词。未设置时使用 `You are a helpful software engineer assistant.`。
+
+此配置用于独立加载本包的场景；`banso-dsh` 入口包会另行设置研究助手身份。
+
+## DSH 通用启动配置
+
+`DSH_HOME` 指定 DSH 配置、profile 和会话数据的根目录，属于 DSH 通用启动配置。本包的会话保存在该目录下的 `sessions-banso-base/`。
+
+- 直接使用 DSH CLI 时，在启动前设置环境变量 `DSH_HOME`；未设置时默认使用 `~/.dsh`。
+- 使用 Python SDK `0.1.5rc1` 时，通过 `dsh_home` 参数指定，也可通过启动环境变量或 SDK 的 `env` 传入 `DSH_HOME`。SDK 不会隐式使用 `~/.dsh`；同时提供时，`dsh_home` 参数优先。
+
+安装插件、启用 profile 和运行 SDK 时应使用同一个 DSH home。上面的安装命令默认使用 `~/.dsh`；如果使用其他目录，在执行安装命令前先设置 `DSH_HOME`。
+
+### Python SDK 传入示例
+
+在已安装 DSH 的工作目录中使用以下配置；`DEEPSEEK_API_KEY` 需预先设置到启动环境中：
+
+```python
+from pathlib import Path
+from deepseek_harness import DeepSeekHarness
+
+harness = DeepSeekHarness(
+    dsh_bin=str(Path("node_modules/.bin/dsh").resolve()),
+    profile="banso-base",
+    dsh_home=str(Path.home() / ".dsh"),
+    env={"DSH_SYSTEM_PROMPT": "你是一名研究助手。"},
+)
+```
+
+SDK 会继承 Python 进程的环境变量，再应用 `env` 中的覆盖值。以上示例只展示配置；启动、调用和关闭步骤见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/README.md)。
 
 ## 来源与许可
 
-基础配置改编自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 `packages/bundle/sdk-minimal/cordis.patch.yml`，裁剪了终端、沙箱等服务，停用会话标题，并调整 profile 名称和会话存储目录。本包采用 [MIT 许可证](LICENSE)，保留上游 `Copyright (c) 2026 DeepSeek` 声明。由 Banso 项目独立维护，非 DeepSeek 官方发行包。
-
-## 独立运行
-
-在本仓库根目录执行 `pnpm install`。然后在 DSH 源码仓库目录执行，替换绝对路径：
-
-```sh
-pnpm dsh plugin --profile banso-base add 'link:/absolute/path/to/banso-dsh/packages/base'
-pnpm dsh plugin --profile banso-base exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh-base"]'
-pnpm dsh --profile banso-base --dump-config
-pnpm dsh --profile banso-base
-```
-
-这些命令用于专用的 `banso-base` profile。运行环境需要 `DEEPSEEK_API_KEY`，可用 `DSH_SYSTEM_PROMPT` 覆盖默认提示词。
-
-服务通过 SDK stdio JSON-RPC 接收请求，由客户端创建 agent。Python SDK 选择 `banso-base`；若由客户端启动 DSH，无需提前启动服务。会话默认保存在 `~/.dsh/sessions-banso-base`，设置 `DSH_HOME` 可改变 home 位置。
-
-基础配置只维护本包的 `cordis.patch.yml`。业务包构建时会复制它；更改后需重新构建业务包并重启。
-
-配置检查与用户的 Python SDK 调用已通过，详细验证范围见 [迁移规划](../../docs/plan.md)。
+基础配置改编自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 `sdk-minimal` bundle，采用 [MIT 许可证](LICENSE)，保留上游 `Copyright (c) 2026 DeepSeek` 声明。本包由 Banso 项目独立维护，非 DeepSeek 官方发行包。

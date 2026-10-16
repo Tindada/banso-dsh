@@ -25,7 +25,7 @@
 
 请求使用 `GET https://r.jina.ai/{目标URL}`、`Accept: application/json` 和 `X-No-Cache: true`。仅在有 key 时发送 Authorization。匿名调用的服务限制以 Jina 官方说明为准。
 
-Banso bundle 默认选择 `jina`，同时注册原生 HTTP provider；将 web 插件的 `fetchProvider` 改为 `http` 即可切回。没有自动 fallback 或重试。
+本 provider 不自动 fallback 或重试。Banso 的抓取 provider 选择见 [入口包运行配置](https://github.com/Tindada/banso-dsh/blob/main/packages/banso/README.md#运行配置)。
 
 ## 结果与失败
 
@@ -33,13 +33,4 @@ Banso bundle 默认选择 `jina`，同时注册原生 HTTP provider；将 web �
 
 Reader warning 包含 `Target URL returned error NNN` 且状态非 2xx 时，返回该状态和 warning 文本。Jina 服务非 2xx、网络异常、无效响应或空正文作为 `WEB_PROVIDER_ERROR` 抛出；外部取消和 provider 超时为 `WEB_ABORTED`。外层工具自身的超时策略仍然生效。
 
-## 验证
-
-仓库根目录执行：
-
-```sh
-pnpm build
-pnpm --filter banso-dsh-web-fetch-jina test
-```
-
-测试使用本地 HTTP 服务，验证请求与响应映射、失败、截断、取消和注册生命周期，不调用 Jina 在线服务。与工具及资料插件的组合测试位于 [banso](../banso/README.md)。
+本地模拟服务测试和组合验证见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md)。
