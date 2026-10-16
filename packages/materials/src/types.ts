@@ -1,3 +1,5 @@
+export type ReadMode = 'extract' | 'direct'
+
 export interface FetchedContent {
   content: string
   finalUrl: string
@@ -23,7 +25,7 @@ export interface Material {
 }
 
 export interface PendingCall {
-  name: 'web_search' | 'web_read' | 'materials_hide'
+  name: 'web_search' | 'web_read' | 'web_fetch' | 'materials_hide'
   callId: string
   turn: number
 }

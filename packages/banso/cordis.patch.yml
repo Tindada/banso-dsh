@@ -36,3 +36,5 @@
 
     - id: banso-materials
       name: banso-dsh-materials
+      config:
+        readMode: !!js process.env.BANSO_WEB_READ_MODE ?? 'extract'

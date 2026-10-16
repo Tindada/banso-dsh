@@ -1,10 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-web'
-import type {} from '../types.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ValueSchemaSpec, InferValue } from '@deepseek-ai/dsh-tools'
-import { fetchMetaFromValue, formatFetchOutput } from '@deepseek-ai/dsh-tool-web'
-import type { WebFetchMeta } from '@deepseek-ai/dsh-tool-web'
+import { getPage, pageProperties } from './page.js'
 import { extractEvidence } from '../extraction/extract.js'
 import type { ExtractionConfig } from '../extraction/extract.js'
 
@@ -14,22 +11,15 @@ const schema = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    requestUrl: { type: 'string', required: true },
+    ...pageProperties,
     focus: { type: 'string', required: true },
-    content: { type: 'string' },
-    finalUrl: { type: 'string' },
-    truncated: { type: 'boolean' },
     evidence: { type: 'string' },
-    error: { type: 'string' },
-    fetchMs: { type: 'number' },
     extractMs: { type: 'number' },
     usage: { type: 'object', additionalProperties: true },
   },
 } as const satisfies ValueSchemaSpec
 
 type ReadResult = InferValue<typeof schema>
-
-const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition {
   return defineTool({
@@ -47,38 +37,10 @@ export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition
       exec.signal.throwIfAborted()
       if (exec.agent === undefined) throw new Error('web_read requires an agent')
       const session = exec.agent.session
-      const state = ctx.sessionProjections.stateOf(session, 'bansoMaterials')
-      if (state === undefined) throw new Error('Materials projection is not registered')
-      const handle = /^S[1-9]\d*$/.test(target)
-      const item = handle ? state.items[target] : state.items[state.urlIndex[target] ?? '']
-      if (handle && item === undefined) throw new Error(`Unknown material handle: ${target}`)
-      const requestUrl = item?.url ?? target
-      if (!/^https?:\/\//.test(requestUrl) || !URL.canParse(requestUrl)) throw new Error(`Invalid read target: ${target}`)
-      const result: ReadResult = { requestUrl, focus }
-      let content = item?.fetched?.content
-      if (content === undefined) {
-        const started = performance.now()
-        try {
-          const fetched = await ctx.web.fetch({ url: requestUrl }, exec.signal)
-          exec.signal.throwIfAborted()
-          if (fetched.statusCode < 200 || fetched.statusCode >= 300) {
-            result.error = `Fetch failed: HTTP ${fetched.statusCode}`
-            return result
-          }
-          content = formatFetchOutput(fetched, Infinity)
-          const meta = fetchMetaFromValue(fetched, Infinity) as unknown as WebFetchMeta
-          result.content = content
-          result.finalUrl = fetched.url
-          result.truncated = meta.truncated
-        } catch (error) {
-          exec.signal.throwIfAborted()
-          result.error = `Fetch failed: ${errorText(error)}`
-          return result
-        } finally {
-          result.fetchMs = Math.round(performance.now() - started)
-        }
-      }
-      const extracted = await extractEvidence(ctx, config, session, { focus, title: item?.title, content }, exec.signal)
+      const page = await getPage(ctx, session, target, exec.signal)
+      const result: ReadResult = { ...page.meta, focus }
+      if (page.content === undefined) return result
+      const extracted = await extractEvidence(ctx, config, session, { focus, title: page.title, content: page.content }, exec.signal)
       Object.assign(result, extracted)
       exec.signal.throwIfAborted()
       return result

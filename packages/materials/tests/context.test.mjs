@@ -34,7 +34,7 @@ class Adapter extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
-async function harness(t) {
+async function harness(t, readMode = 'extract') {
   const ctx = new Context()
   t.after(() => ctx.fiber.dispose())
   const errors = []
@@ -42,7 +42,7 @@ async function harness(t) {
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(Web)
-  const fiber = await ctx.plugin(Materials)
+  const fiber = await ctx.plugin(Materials, { readMode })
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
   const agent = await ctx.agentLoop.create(SessionId('main'), { provider: 'mock', model: 'mock' })
@@ -52,7 +52,7 @@ async function harness(t) {
   const recordRead = (text = '提取证据', requestUrl = url) => {
     const callId = `fixture-${++count}`
     const call = agent.session.append('tool/call', {
-      name: 'web_read', arguments: JSON.stringify({ target: requestUrl, focus: 'facts' }), callId, turn: 0, step: 0,
+      name: readMode === 'direct' ? 'web_fetch' : 'web_read', arguments: JSON.stringify({ target: requestUrl, focus: 'facts' }), callId, turn: 0, step: 0,
     })
     agent.session.append('tool/result', {
       turn: 0, step: 0,
@@ -255,4 +255,29 @@ test('a failed admission after replacement is repaired on the next step', async 
   assert.equal(snapshots(messages).length, 1)
   assert.equal(placeholders(messages).length, 1)
   assert.match(textOf(snapshots(messages)[0]), /补充证据/)
+})
+
+
+test('direct snapshots show one body, suppress evidence, preserve snippets until fetched, hide and restore', async t => {
+  const h = await harness(t, 'direct')
+  h.recordRead('Evidence not to display')
+  await h.run()
+  let text = textOf(snapshots(h.adapter.requests.at(-1).messages)[0])
+  assert.equal(text.split('正文完整保留').length - 1, 1)
+  assert.doesNotMatch(text, /Evidence not to display/)
+  h.recordRead('Again')
+  await h.run()
+  text = textOf(snapshots(h.adapter.requests.at(-1).messages)[0])
+  assert.equal(text.split('正文完整保留').length - 1, 1)
+  await h.recordHide(['S1'])
+  await h.run()
+  assert.doesNotMatch(textOf(snapshots(h.adapter.requests.at(-1).messages)[0]), /正文完整保留/)
+  h.recordRead()
+  await h.run()
+  assert.match(textOf(snapshots(h.adapter.requests.at(-1).messages)[0]), /正文完整保留/)
+  const state = { items: { S1: { handle: 'S1', url, snippet: 'Preview', evidence: [{ focus: 'old', text: 'OLD EVIDENCE', time: 1 }] } } }
+  assert.match(renderMaterials(state, 'direct'), /Preview/)
+  state.items.S1.fetched = { content: '', finalUrl: url, truncated: false, time: 1 }
+  assert.doesNotMatch(renderMaterials(state, 'direct'), /Preview|OLD EVIDENCE/)
+  assert.match(renderMaterials(state, 'direct'), /Page text:/)
 })

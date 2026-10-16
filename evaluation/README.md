@@ -39,6 +39,7 @@ EVAL_DSH_HOME=/absolute/path/to/dsh-home
 EVAL_DSH_PROFILE=banso-dsh
 EVAL_DSH_MODEL=deepseek-flash
 EVAL_DSH_REASONING_EFFORT=high
+# BANSO_WEB_READ_MODE=direct  # 可选覆盖；省略时遵循 DSH 配置
 DEEPSEEK_API_KEY=...
 TAVILY_API_KEY=...
 JINA_API_KEY=...
@@ -47,6 +48,10 @@ JINA_API_KEY=...
 `EVAL_DSH_BIN`、`EVAL_DSH_HOME` 必填；profile 默认 `banso-dsh`，模型默认 `deepseek-flash`。Jina 密钥可选。运行配置只读取这份固定 `.env`；其中的值覆盖子进程同名环境变量，不读取进程里的 `EVAL_DSH_MODEL` 作为模型选择。
 
 `EVAL_DSH_REASONING_EFFORT` 控制主 agent loop 的推理强度，可选 `off / low / high / max`，默认 `high`；网页证据提取仍固定为 `off`。该设置记录在 `manifest.json` 的 runtime 中，续跑时须保持一致。
+
+`BANSO_WEB_READ_MODE` 可显式选择 `extract`（`web_read(target, focus)` 提取证据）或 `direct`（`web_fetch(target)` 将正文放入资料快照）。evaluation 只传本目录固定 `.env` 中显式设置的值，不提供默认值；值会去除首尾空白，空字符串和其他模式在启动 SDK 前报错。未设置时不向 SDK 的 `env` 添加此变量，由 DSH 的环境加载和 YAML 默认值决定；SDK 仍可能继承终端中的同名变量。需使用支持该配置的 Banso bundle。
+
+manifest 的 `runtime.read_mode_override` 记录规范化后的显式覆盖值，未设置时为 `null`，不表示实际生效模式，也不作为 SDK 构造参数。续跑仅检查覆盖值一致；无法检测继承环境或 YAML 默认值变化，需自行保持 DSH 配置一致。缺少此字段的旧 manifest 仍拒绝续跑，不自动补写或修改旧结果。两组实验使用独立输出目录和新 session；已完成的旧结果仍可离线评分。实际生效配置的读取、成本统计和自动 A/B 实验留待后续。
 
 答题 CLI 仅保留三个参数：
 

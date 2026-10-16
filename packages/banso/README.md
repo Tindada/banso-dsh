@@ -1,12 +1,21 @@
 # Banso 业务 bundle
 
-`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取 和 [Banso 提示词插件](../prompt/README.md)，向 agent 提供 `web_search`、`web_read`、研究规则和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取 和 [Banso 提示词插件](../prompt/README.md)，向 agent 提供 `web_search`、按模式选择的阅读工具、研究规则和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。基础包配置不变。
 
 本包由 Banso 项目独立维护，非 DeepSeek 官方发行包。随包分发的 `base.patch.yml` 改编自 DSH 的 `sdk-minimal` 配置，遵循 MIT；构建和打包时同步生成的 `THIRD_PARTY_NOTICES.md` 保留其完整上游许可声明。
 
-同时加载 [会话资料插件](../materials/README.md)，从现有网页工具日志维护可恢复的资料集合。资料通过每步更新的快照进入模型上下文，旧快照被简短占位替代，`web_read` 使用单个 `target` 接受资料 handle 或完整 URL，并要求 `focus` 指定提取目标。该插件同时提供网页工具，search／read 向模型返回简短回执；read 按 focus 提取证据，全文只保存供后续复用，快照展示证据。组合关闭原生 fetch 工具，并加载 DSH 工具超时策略。
+默认 extract 模式加载 [会话资料插件](../materials/README.md)，从现有网页工具日志维护可恢复的资料集合。资料通过每步更新的快照进入模型上下文，旧快照被简短占位替代，`web_read` 使用单个 `target` 接受资料 handle 或完整 URL，并要求 `focus` 指定提取目标。该插件同时提供网页工具，search／read 向模型返回简短回执；read 按 focus 提取证据，全文只保存供后续复用，快照展示证据。组合关闭原生 fetch 工具，并加载 DSH 工具超时策略。
+
+## 阅读模式
+
+组合将环境变量 `BANSO_WEB_READ_MODE` 传给 materials 的 `readMode`，默认 `extract`：
+
+- `extract` 注册 `web_read(target, focus)`，快照展示提取证据。
+- `direct` 注册自定义 `web_fetch(target)`，快照展示格式化正文，不调用提取模型。
+
+两种模式都保留搜索与隐藏工具，原生网页插件始终配置 `fetch: false`；底层抓取服务不受影响。每次运行固定模式，切换时创建新 session，恢复时使用相同模式。直接模式不额外限制正文长度，仍保留 provider 截断。
 
 ## 从 npm 安装
 

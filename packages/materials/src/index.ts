@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import z from '@deepseek-ai/schemastery'
+import { createFetchTool } from './tools/fetch.js'
+import type { ReadMode } from './types.js'
 import { createReadTool } from './tools/read.js'
 import type { ReadConfig } from './tools/read.js'
 import { registerSearchWrapper } from './tools/search.js'
@@ -10,13 +12,14 @@ import { materialsSnapshotProjection } from './state/snapshot.js'
 import { registerMaterialsContext } from './context/context.js'
 import { createHideTool } from './tools/hide.js'
 
-export type { Material, MaterialsState, FetchedContent, Evidence } from './types.js'
+export type { Material, MaterialsState, FetchedContent, Evidence, ReadMode } from './types.js'
 export type { MaterialsSnapshotState } from './state/snapshot.js'
 export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents', 'tools', 'web', 'llm', 'systemPrompt']
 
-export interface Config extends ReadConfig {}
+export interface Config extends ReadConfig { readMode: ReadMode }
 export const Config: z<Config> = z.object({
+  readMode: z.union(['extract', 'direct'] as const).default('extract'),
   provider: z.string(),
   model: z.string(),
   maxInputBytes: z.number().step(1).min(1).default(200_000),
@@ -31,8 +34,8 @@ export function apply(ctx: Context, config: Config): void {
   ctx.sessionProjections.register(materialsProjection)
   ctx.sessionProjections.register(materialsSnapshotProjection)
   ctx.tools.register(createHideTool(ctx))
-  ctx.tools.register(createReadTool(ctx, config))
+  ctx.tools.register(config.readMode === 'direct' ? createFetchTool(ctx, config) : createReadTool(ctx, config))
   registerWebGuidance(ctx)
   registerSearchWrapper(ctx)
-  registerMaterialsContext(ctx)
+  registerMaterialsContext(ctx, config.readMode)
 }

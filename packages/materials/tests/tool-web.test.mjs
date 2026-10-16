@@ -12,6 +12,7 @@ import Web from '@deepseek-ai/dsh-web'
 import * as Timeout from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import * as NativeTools from '@deepseek-ai/dsh-tool-web'
 import * as Materials from '../lib/index.js'
+import { createFetchTool } from '../lib/tools/fetch.js'
 import { createReadTool } from '../lib/tools/read.js'
 import { registerSearchWrapper } from '../lib/tools/search.js'
 import { registerWebGuidance } from '../lib/context/guidance.js'
@@ -20,7 +21,7 @@ const WebToolFixture = {
   inject: Materials.inject,
   Config: Materials.Config,
   apply(ctx, config) {
-    ctx.tools.register(createReadTool(ctx, config))
+    ctx.tools.register(config.readMode === 'direct' ? createFetchTool(ctx, config) : createReadTool(ctx, config))
     registerWebGuidance(ctx)
     registerSearchWrapper(ctx)
   },
@@ -46,7 +47,7 @@ class Adapter extends LlmAdapter {
     yield { type: 'finish', reason: this.finish }
   }
 }
-async function harness(t, { native = true, wrapper = true, projection = true, options = {} } = {}) {
+async function harness(t, { native = true, wrapper = true, projection = true, full = false, options = {} } = {}) {
   const ctx = new Context()
   t.after(() => ctx.fiber.dispose())
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
@@ -55,7 +56,7 @@ async function harness(t, { native = true, wrapper = true, projection = true, op
   await ctx.plugin(Timeout)
   // Isolate web tool behavior with a data-only projection; full plugin coverage lives in the composition tests.
   const items = {}, urlIndex = {}
-  if (projection) ctx.sessionProjections.register({ key: 'bansoMaterials', stateVersion: 1, stateSchema: { parse: value => value }, init: () => ({ items, urlIndex }), apply: state => state })
+  if (projection && !full) ctx.sessionProjections.register({ key: 'bansoMaterials', stateVersion: 1, stateSchema: { parse: value => value }, init: () => ({ items, urlIndex }), apply: state => state })
   const results = {
     search: { sources: [{ url, title: 'Title', snippet: 'Snippet' }], truncated: false },
     fetch: { url: url + '/final', statusCode: 200, body: { kind: 'html', content: '<h1>Title</h1><p>Full body.</p>' }, truncated: false },
@@ -75,7 +76,7 @@ async function harness(t, { native = true, wrapper = true, projection = true, op
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
   const nativeFiber = native ? await ctx.plugin(NativeTools, { fetch: false }) : undefined
-  const wrapperFiber = wrapper ? await ctx.plugin(WebToolFixture, { ...config, ...options }) : undefined
+  const wrapperFiber = wrapper ? await ctx.plugin(full ? Materials : WebToolFixture, { ...config, ...options }) : undefined
   let count = 0
   const create = setup => ctx.agents.create({ sessionId: SessionId(`agent-${++count}`), ...(setup ? { setup } : {}) })
   const execute = (agent, name = 'web_read', args = name === 'web_read' ? { target: url, focus: 'facts' } : { queries: ['news'] }, signal = new AbortController().signal) =>
@@ -297,5 +298,99 @@ test('configuration validates paired routes and positive budgets', () => {
   }
   for (const value of [{ provider: 'mock' }, { model: 'extract' }]) {
     assert.throws(() => Materials.apply({}, value), /configured together/)
+  }
+})
+
+
+test('unified plugin selects one reading tool and follows scoped visibility and disposal', async t => {
+  for (const mode of [undefined, 'extract', 'direct']) {
+    const h = await harness(t, { full: true, options: mode ? { readMode: mode } : {} })
+    const { agent } = await h.create()
+    const name = mode === 'direct' ? 'web_fetch' : 'web_read'
+    const other = name === 'web_fetch' ? 'web_read' : 'web_fetch'
+    assert.ok(h.ctx.tools.get(name, agent))
+    assert.equal(h.ctx.tools.get(other, agent), undefined)
+    const guidance = async () => (await h.ctx.systemPrompt.assemble({ agent, scope: agent })).sections.find(s => s.name === `tool:${name}`)?.text
+    assert.match(await guidance(), mode === 'direct' ? /do not refresh/ : /specific focus/)
+    const restore = agent.ctx.tools.restrict({ deny: [name] })
+    assert.equal(h.ctx.tools.get(name, agent), undefined)
+    assert.equal(await guidance(), '')
+    restore()
+    await h.wrapperFiber.dispose()
+    assert.equal(h.ctx.tools.get(name, agent), undefined)
+    assert.equal(await guidance(), undefined)
+  }
+  assert.throws(() => Materials.Config({ readMode: 'unknown' }))
+})
+
+test('direct fetch returns page metadata and short receipts without extraction or input budgets', async t => {
+  const h = await harness(t, { options: { readMode: 'direct', maxInputBytes: 1 } })
+  const { agent } = await h.create()
+  const fetch = target => h.execute(agent, 'web_fetch', { target })
+  assert.deepEqual(h.ctx.tools.schemas(agent).find(t => t.name === 'web_fetch').parameters.required, ['target'])
+  const first = await fetch(url)
+  assert.equal(first.isError, false, textOf(first))
+  assert.match(first.meta.content, /Full body/)
+  assert.equal(first.meta.finalUrl, url + '/final')
+  assert.doesNotMatch(textOf(first), /Full body/)
+  assert.ok(first.meta.fetchMs >= 0)
+  for (const key of ['evidence', 'focus', 'usage', 'extractMs']) assert.equal(first.meta[key], undefined)
+  h.items.S1 = { handle: 'S1', url, fetched: { content: '', finalUrl: url, truncated: true, time: 1 } }
+  h.urlIndex[url] = 'S1'
+  for (const target of [url, 'S1']) {
+    const reused = await fetch(target)
+    assert.match(textOf(reused), /Saved page reused/)
+    assert.equal(reused.meta.content, undefined)
+    assert.equal(reused.meta.fetchMs, undefined)
+  }
+  assert.equal(h.calls.length, 1)
+  assert.equal(h.adapter.requests.length, 0)
+})
+
+test('direct fetch handles empty sources, truncation, failures and invalid targets', async t => {
+  const h = await harness(t, { options: { readMode: 'direct' } })
+  const { agent } = await h.create()
+  const fetch = target => h.execute(agent, 'web_fetch', { target })
+  h.results.fetch = { url, statusCode: 200, body: { kind: 'text', content: '' }, truncated: true }
+  const empty = await fetch(url)
+  assert.equal(empty.isError, false)
+  assert.equal(typeof empty.meta.content, 'string')
+  assert.equal(empty.meta.truncated, true)
+  h.results.fetch = { ...h.results.fetch, statusCode: 503 }
+  assert.match((await fetch(url)).meta.error, /HTTP 503/)
+  h.results.fetch = new Error('offline')
+  assert.match((await fetch(url)).meta.error, /offline/)
+  const count = h.calls.length
+  for (const target of ['S99', 'file:///tmp/a', 'not a URL']) assert.equal((await fetch(target)).isError, true)
+  assert.equal((await h.execute(undefined, 'web_fetch', { target: url })).isError, true)
+  const noProjection = await harness(t, { projection: false, options: { readMode: 'direct' } })
+  assert.equal((await noProjection.execute((await noProjection.create()).agent, 'web_fetch', { target: url })).isError, true)
+  assert.equal(h.calls.length, count)
+  assert.equal(h.adapter.requests.length, 0)
+})
+
+test('direct fetch cancellation and timeout commit no partial metadata', async t => {
+  for (const timeout of [false, true]) {
+    const h = await harness(t, { options: { readMode: 'direct', timeoutMs: timeout ? 30 : 120000 } })
+    const { agent } = await h.create()
+    let started, aborted = false
+    const ready = new Promise(resolve => { started = resolve })
+    h.results.fetch = (_request, signal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => { aborted = true; reject(signal.reason) }, { once: true })
+      started()
+    })
+    const abort = new AbortController()
+    const keepAlive = setInterval(() => {}, 1000)
+    try {
+      const pending = h.execute(agent, 'web_fetch', { target: url }, abort.signal)
+      await ready
+      if (!timeout) abort.abort()
+      const result = await pending
+      assert.equal(result.isError, true)
+      assert.equal(result.meta, undefined)
+      assert.equal(aborted, true)
+      if (timeout) assert.equal(result.error.info.code, 'TOOL_TIMEOUT')
+      assert.equal(h.adapter.requests.length, 0)
+    } finally { clearInterval(keepAlive) }
   }
 })

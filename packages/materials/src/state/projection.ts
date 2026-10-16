@@ -24,14 +24,17 @@ const searchMetaSchema = z.object({
   answer: z.string().optional(),
 })
 
-const readMetaSchema = z.object({
+const fetchMetaSchema = z.object({
   requestUrl: urlSchema,
-  focus: z.string().refine(value => value.trim().length > 0),
   content: z.string().optional(),
   finalUrl: urlSchema.optional(),
   truncated: z.boolean().optional(),
-  evidence: z.string().optional(),
   error: z.string().optional(),
+})
+
+const readMetaSchema = fetchMetaSchema.extend({
+  focus: z.string().refine(value => value.trim().length > 0),
+  evidence: z.string().optional(),
 })
 
 const fetchedSchema = z.object({
@@ -67,7 +70,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
   pendingCalls: z.record(
     z.string(),
     z.object({
-      name: z.enum(['web_search', 'web_read', 'materials_hide']),
+      name: z.enum(['web_search', 'web_read', 'web_fetch', 'materials_hide']),
       callId: z.string(),
       turn: z.number().int(),
     }),
@@ -76,7 +79,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
 
 function trackCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
   const { name, callId, turn } = event.data
-  if (name !== 'web_search' && name !== 'web_read' && name !== 'materials_hide') return undefined
+  if (name !== 'web_search' && name !== 'web_read' && name !== 'web_fetch' && name !== 'materials_hide') return undefined
 
   return { name, callId, turn }
 }
@@ -138,12 +141,15 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     return next
   }
 
-  if (call.name === 'web_read') {
+  if (call.name === 'web_read' || call.name === 'web_fetch') {
     // Ordinary tool errors include invalid input and cancellation; no stage facts were committed.
     if (event.data.message.isError) return next
-    const parsed = readMetaSchema.safeParse(event.data.meta)
+    const parsed = fetchMetaSchema.safeParse(event.data.meta)
+    const read = call.name === 'web_read' ? readMetaSchema.safeParse(event.data.meta) : undefined
+    if (read !== undefined && !read.success) return next
     if (!parsed.success) return next
-    const { requestUrl, focus, content, finalUrl, truncated, evidence } = parsed.data
+    const { requestUrl, content, finalUrl, truncated } = parsed.data
+    const evidenceGroup = read?.success ? read.data : undefined
     if (content !== undefined && (finalUrl === undefined || truncated === undefined)) return next
     upsert(next, requestUrl, item => {
       const visible = { ...item, hidden: false }
@@ -153,12 +159,12 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
             fetched: { content, finalUrl: finalUrl!, truncated: truncated!, time: event.time },
           }
         : visible
-      if (!evidence?.trim()) return updated
+      if (!evidenceGroup?.evidence?.trim()) return updated
       return {
         ...updated,
         evidence: [
           ...item.evidence ?? [],
-          { focus, text: evidence, time: event.time },
+          { focus: evidenceGroup.focus, text: evidenceGroup.evidence, time: event.time },
         ],
       }
     })

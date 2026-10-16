@@ -36,6 +36,11 @@ def runtime_options() -> dict:
     if not env_file.is_file():
         raise ValueError(f"Create {env_file} from .env.example before running")
     env = {key: value for key, value in dotenv_values(env_file).items() if value is not None}
+    if "BANSO_WEB_READ_MODE" in env:
+        read_mode = env["BANSO_WEB_READ_MODE"].strip()
+        if read_mode not in {"extract", "direct"}:
+            raise ValueError("BANSO_WEB_READ_MODE must be extract or direct")
+        env["BANSO_WEB_READ_MODE"] = read_mode
     for key in ("EVAL_DSH_BIN", "EVAL_DSH_HOME"):
         if not env.get(key, "").strip():
             raise ValueError(f"{key} is required in {env_file}")
@@ -144,6 +149,7 @@ def main(argv=None):
             (output / "cases.jsonl").write_text(serialized, encoding="utf-8")
             write_json(output / "manifest.json", manifest)
         runtime = {k: v for k, v in options.items() if k != "env"}
+        runtime["read_mode_override"] = options["env"].get("BANSO_WEB_READ_MODE")
         if manifest["runtime"] is not None and manifest["runtime"] != runtime:
             raise ValueError("Resume runtime configuration differs from manifest")
         manifest["runtime"] = runtime

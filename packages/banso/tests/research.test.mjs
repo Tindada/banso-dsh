@@ -29,6 +29,7 @@ class Adapter extends LlmAdapter {
   requests = []
   targets = [url]
   focus = 'facts'
+  readMode = 'extract'
   extractions = []
   async resolveModel(provider, model) {
     return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } }
@@ -47,8 +48,8 @@ class Adapter extends LlmAdapter {
     this.requests.push(request)
     const count = this.requests.length
     if (count < 3) {
-      const name = count === 1 ? 'web_search' : 'web_read'
-      const argumentsList = count === 1 ? [{ queries: ['news'] }] : this.targets.map(target => ({ target, focus: this.focus }))
+      const name = count === 1 ? 'web_search' : this.readMode === 'direct' ? 'web_fetch' : 'web_read'
+      const argumentsList = count === 1 ? [{ queries: ['news'] }] : this.targets.map(target => this.readMode === 'direct' ? { target } : { target, focus: this.focus })
       for (const [index, args] of argumentsList.entries()) {
         const id = `call-${count}-${index}`, argumentsText = JSON.stringify(args)
         yield { type: 'block-start', index, blockType: 'tool-call' }
@@ -64,7 +65,7 @@ class Adapter extends LlmAdapter {
     }
   }
 }
-async function setup(root, enabled = true, fetchProvider, jinaConfig) {
+async function setup(root, enabled = true, fetchProvider, jinaConfig, readMode = 'extract') {
   const ctx = new Context()
   const errors = []
   ctx.on('agent/error', ({ error }) => errors.push(error))
@@ -86,8 +87,9 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig) {
   if (jinaConfig) await ctx.plugin(Jina, jinaConfig)
   await ctx.plugin(WebTools, { fetch: false })
   await ctx.plugin(Timeout)
-  if (enabled) await ctx.plugin(Materials)
+  if (enabled) await ctx.plugin(Materials, { readMode })
   const adapter = new Adapter()
+  adapter.readMode = readMode
   ctx.llm.registerAdapter(['mock'], adapter)
   return { ctx, adapter, errors, fetchCalls }
 }
@@ -287,4 +289,39 @@ test('Jina Markdown feeds extraction while the material snapshot exposes only ev
   assert.match(snapshot, /Evidence\./)
   assert.ok(JSON.parse(textOf(adapter.extractions[0].messages[0])).content.includes(markdown))
   assert.doesNotMatch(snapshot, /Search snippet: Preview/)
+})
+
+
+test('direct mode exposes bodies through snapshots, restores JSONL and reuses pages without extraction', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'banso-direct-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const first = await setup(root, true, undefined, undefined, 'direct')
+  let closed = false
+  t.after(async () => { if (!closed) await first.ctx.fiber.dispose() })
+  first.adapter.targets = ['S1']
+  const { agent } = await first.ctx.agents.create({ sessionId: SessionId('direct'), agentOptions: { provider: 'mock', model: 'mock' } })
+  const run = async (agent, h) => {
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    assert.deepEqual(h.errors, [])
+    assert.equal(h.adapter.extractions.length, 0)
+    const last = h.adapter.requests.at(-1)
+    assert.match(textOf(snapshots(last)[0]), /FULL BODY ONLY/)
+    assert.equal(snapshots(last).length, 1)
+    assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
+    assert.ok(last.messages.filter(m => m.role === 'tool').every(m => !textOf(m).includes('FULL BODY ONLY')))
+  }
+  await run(agent, first)
+  assert.equal(first.fetchCalls.length, 1)
+  const before = structuredClone(stateOf(first.ctx, agent))
+  assert.equal(before.items.S1.evidence, undefined)
+  await first.ctx.fiber.dispose()
+  closed = true
+  const resumed = await setup(root, true, undefined, undefined, 'direct')
+  t.after(() => resumed.ctx.fiber.dispose())
+  const restored = (await resumed.ctx.agents.resume({ resumeSessionId: SessionId('direct'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+  assert.deepEqual(stateOf(resumed.ctx, restored), before)
+  await run(restored, resumed)
+  assert.equal(resumed.fetchCalls.length, 0)
+  assert.deepEqual(stateOf(resumed.ctx, restored).items.S1.fetched, before.items.S1.fetched)
 })
