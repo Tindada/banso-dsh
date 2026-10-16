@@ -7,6 +7,7 @@ import Llm, { LlmAdapter, LlmError, createUserMessage, createAssistantMessage, c
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
+import Web from '@deepseek-ai/dsh-web'
 import Tools from '@deepseek-ai/dsh-tools'
 import * as Materials from '../lib/index.js'
 import { renderMaterials } from '../lib/context/context.js'
@@ -40,6 +41,7 @@ async function harness(t) {
   ctx.on('agent/error', ({ error }) => errors.push(error))
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, { agents: [] })
+  await ctx.plugin(Web)
   const fiber = await ctx.plugin(Materials)
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)

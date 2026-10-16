@@ -11,7 +11,20 @@ import Loop from '@deepseek-ai/dsh-agent-loop'
 import Web from '@deepseek-ai/dsh-web'
 import * as Timeout from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import * as NativeTools from '@deepseek-ai/dsh-tool-web'
-import * as WrappedTools from '../lib/index.js'
+import * as Materials from '../lib/index.js'
+import { createReadTool } from '../lib/tools/read.js'
+import { registerSearchWrapper } from '../lib/tools/search.js'
+import { registerWebGuidance } from '../lib/context/guidance.js'
+
+const WebToolFixture = {
+  inject: Materials.inject,
+  Config: Materials.Config,
+  apply(ctx, config) {
+    ctx.tools.register(createReadTool(ctx, config))
+    registerWebGuidance(ctx)
+    registerSearchWrapper(ctx)
+  },
+}
 const url = 'https://example.com/article'
 const config = { provider: 'mock', model: 'extract' }
 class Adapter extends LlmAdapter {
@@ -40,7 +53,7 @@ async function harness(t, { native = true, wrapper = true, projection = true, op
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: 'fixture' })
   await ctx.plugin(Timeout)
-  // Data-only fixture: this package never loads the materials plugin.
+  // Isolate web tool behavior with a data-only projection; full plugin coverage lives in the composition tests.
   const items = {}, urlIndex = {}
   if (projection) ctx.sessionProjections.register({ key: 'bansoMaterials', stateVersion: 1, stateSchema: { parse: value => value }, init: () => ({ items, urlIndex }), apply: state => state })
   const results = {
@@ -62,7 +75,7 @@ async function harness(t, { native = true, wrapper = true, projection = true, op
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
   const nativeFiber = native ? await ctx.plugin(NativeTools, { fetch: false }) : undefined
-  const wrapperFiber = wrapper ? await ctx.plugin(WrappedTools, { ...config, ...options }) : undefined
+  const wrapperFiber = wrapper ? await ctx.plugin(WebToolFixture, { ...config, ...options }) : undefined
   let count = 0
   const create = setup => ctx.agents.create({ sessionId: SessionId(`agent-${++count}`), ...(setup ? { setup } : {}) })
   const execute = (agent, name = 'web_read', args = name === 'web_read' ? { target: url, focus: 'facts' } : { queries: ['news'] }, signal = new AbortController().signal) =>
@@ -76,7 +89,7 @@ test('tool guidance replaces native search, follows visibility, and restores on 
   const assemble = () => h.ctx.systemPrompt.assemble({ agent, scope: agent })
   const section = (assembly, name) => assembly.sections.find(item => item.name === name)?.text
   const original = await assemble()
-  const wrapper = await h.ctx.plugin(WrappedTools, config)
+  const wrapper = await h.ctx.plugin(WebToolFixture, config)
   const active = await assemble()
   assert.equal(active.sections.filter(item => item.name === 'tool:web_search').length, 1)
   assert.match(section(active, 'tool:web_search'), /materials snapshot/)
@@ -206,7 +219,7 @@ test('invalid arguments and missing material/agent fail without making requests'
 
 test('search wrapper preserves native execution and visibility; read loads independently and disposes normally', async t => {
   const h = await harness(t, { native: false, wrapper: false }), a = await h.create()
-  const wrapper = await h.ctx.plugin(WrappedTools, config)
+  const wrapper = await h.ctx.plugin(WebToolFixture, config)
   assert.ok(h.ctx.tools.get('web_read', a.agent))
   assert.equal(h.ctx.tools.get('web_search', a.agent), undefined)
   const native = await h.ctx.plugin(NativeTools, { fetch: false })
@@ -234,7 +247,7 @@ test('search wrapper preserves native execution and visibility; read loads indep
   await wrapper.dispose()
   assert.equal(h.ctx.tools.get('web_read', a.agent), undefined)
   assert.equal(h.ctx.tools.get('web_search', a.agent), h.ctx.tools.get('web_search'))
-  await h.ctx.plugin(WrappedTools, config)
+  await h.ctx.plugin(WebToolFixture, config)
   assert.ok(h.ctx.tools.get('web_read', a.agent))
   await reloaded.dispose()
 })
@@ -280,9 +293,9 @@ test('DSH timeout policy cancels in-flight extraction and publishes no partial b
 
 test('configuration validates paired routes and positive budgets', () => {
   for (const value of [{ maxInputBytes: 0 }, { maxOutputTokens: -1 }, { timeoutMs: 0 }]) {
-    assert.throws(() => WrappedTools.Config(value))
+    assert.throws(() => Materials.Config(value))
   }
   for (const value of [{ provider: 'mock' }, { model: 'extract' }]) {
-    assert.throws(() => WrappedTools.apply({}, value), /configured together/)
+    assert.throws(() => Materials.apply({}, value), /configured together/)
   }
 })

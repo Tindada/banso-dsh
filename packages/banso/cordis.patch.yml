@@ -6,9 +6,6 @@
       You are Banso, a news research assistant. Search and read web pages to provide accurate, evidence-based answers to the user's questions.
 
 - insert:
-    - id: banso-materials
-      name: banso-dsh-materials
-
     - id: banso-prompt
       name: banso-dsh-prompt
 
@@ -37,5 +34,5 @@
     - id: tool-call-timeout-policy
       name: '@deepseek-ai/dsh-tool-call-timeout-policy'
 
-    - id: banso-tool-web
-      name: banso-dsh-tool-web
+    - id: banso-materials
+      name: banso-dsh-materials

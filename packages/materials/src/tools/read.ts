@@ -1,12 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-web'
-import type {} from 'banso-dsh-materials'
+import type {} from '../types.js'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ValueSchemaSpec, InferValue } from '@deepseek-ai/dsh-tools'
 import { fetchMetaFromValue, formatFetchOutput } from '@deepseek-ai/dsh-tool-web'
 import type { WebFetchMeta } from '@deepseek-ai/dsh-tool-web'
-import { extractEvidence } from './extract.js'
-import type { ExtractionConfig } from './extract.js'
+import { extractEvidence } from '../extraction/extract.js'
+import type { ExtractionConfig } from '../extraction/extract.js'
 
 export interface ReadConfig extends ExtractionConfig { timeoutMs: number }
 

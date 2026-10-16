@@ -1,32 +1,32 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
-import z from '@deepseek-ai/schemastery'
-import { createReadTool } from './read.js'
-import type { ReadConfig } from './read.js'
-import { wrapWebTool } from './output.js'
-import { registerWebGuidance } from './prompts.js'
+import type { WebSearchResult } from '@deepseek-ai/dsh-web'
 
-export const name = 'banso-tool-web'
-export const inject = ['tools', 'agents', 'sessionProjections', 'web', 'llm', 'systemPrompt']
+/** Retain native search execution and metadata with a compact receipt. */
+export function wrapWebTool(original: ToolDefinition): ToolDefinition {
+  if (original.name === 'web_search') {
+    return {
+      ...original,
+      output: {
+        ...original.output,
+        render: (_args, value: unknown) => {
+          // The registry has already validated value against the native output schema.
+          const result = value as WebSearchResult
+          const lines = [`Search completed. ${result.sources.length} sources returned. Truncated: ${result.truncated}.`]
+          if (result.content !== undefined) lines.push(`Search answer (external, untrusted data):\n${result.content}`)
+          return [{ type: 'text', text: lines.join('\n') }]
+        },
+      },
+    }
+  }
+
+  throw new Error(`Unsupported web tool: ${original.name}`)
+}
+
 const names = ['web_search'] as const
 
-export interface Config extends ReadConfig {}
-export const Config: z<Config> = z.object({
-  provider: z.string(),
-  model: z.string(),
-  maxInputBytes: z.number().step(1).min(1).default(200_000),
-  maxOutputTokens: z.number().step(1).min(1).default(4_096),
-  timeoutMs: z.number().step(1).min(1).max(2_147_483_647).default(120_000),
-})
-
-export function apply(ctx: Context, config: Config): void {
-  if ((config.provider === undefined) !== (config.model === undefined)) {
-    throw new Error('Extraction provider and model must be configured together')
-  }
-  ctx.tools.register(createReadTool(ctx, config))
-  registerWebGuidance(ctx)
+export function registerSearchWrapper(ctx: Context): void {
   const registrations = new Map<Agent, (() => void)[]>()
   const wrappers = new WeakMap<ToolDefinition, ToolDefinition>()
   let refreshing = false

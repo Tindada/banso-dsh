@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { once } from 'node:events'
 import * as Jina from 'banso-dsh-web-fetch-jina'
 import { test } from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -20,7 +20,6 @@ import Web from '@deepseek-ai/dsh-web'
 import * as WebTools from '@deepseek-ai/dsh-tool-web'
 import * as Materials from 'banso-dsh-materials'
 import * as BansoPrompt from 'banso-dsh-prompt'
-import * as WrappedTools from 'banso-dsh-tool-web'
 import Invariants from '@deepseek-ai/dsh-invariants'
 import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import * as LoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
@@ -87,7 +86,6 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig) {
   if (jinaConfig) await ctx.plugin(Jina, jinaConfig)
   await ctx.plugin(WebTools, { fetch: false })
   await ctx.plugin(Timeout)
-  await ctx.plugin(WrappedTools)
   if (enabled) await ctx.plugin(Materials)
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -155,17 +153,19 @@ test('search and read feed materials through metadata, survive JSONL and continu
   assert.equal(resumed.adapter.requests.length, 0)
   assert.deepEqual(resumed.ctx.sessionProjections.stateOf(restored.session, 'bansoMaterialsSnapshot'), locatorBefore)
 
+  await cp(join(root, 'enabled'), join(root, 'disabled'), { recursive: true })
   const control = await setup(join(root, 'disabled'), false)
   t.after(() => control.ctx.fiber.dispose())
-  const controlAgent = (await control.ctx.agents.create({ sessionId: SessionId('control'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
-  controlAgent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
-  await controlAgent.whenIdle()
-  assert.ok(control.adapter.requests.every(request => snapshots(request).length === 0))
-  // Register after the complete history exists, then unload and rebuild again.
+  const controlAgent = (await control.ctx.agents.resume({ resumeSessionId: SessionId('research'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
+  assert.equal(stateOf(control.ctx, controlAgent), undefined)
+  assert.equal(control.ctx.tools.get('web_read', controlAgent), undefined)
+  // Load the unified plugin after replaying history, then unload and rebuild again.
   const fiber = await control.ctx.plugin(Materials)
-  assert.equal(stateOf(control.ctx, controlAgent).items.S1.url, url)
+  assert.deepEqual(stateOf(control.ctx, controlAgent), before)
+  assert.ok(control.ctx.tools.get('web_read', controlAgent))
   await fiber.dispose()
   assert.equal(stateOf(control.ctx, controlAgent), undefined)
+  assert.equal(control.ctx.tools.get('web_read', controlAgent), undefined)
   await control.ctx.plugin(Materials)
   assert.equal(stateOf(control.ctx, controlAgent).nextHandle, 2)
   control.adapter.requests = []
