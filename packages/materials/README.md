@@ -2,6 +2,21 @@
 
 `banso-dsh-materials` 从 `web_search`、`web_read`、`materials_hide` 的工具事件维护 host-only `bansoMaterials` 投影，依赖 `sessionProjections`、`agents` 和 `tools`，并注册 `materials_hide` 工具。配合 [网页工具](../tool-web/README.md) 的 metadata 协议使用，不调用 LLM、不导入 tool-web、不新增事件类型。
 
+## 源码结构
+
+```text
+src/
+├── index.ts                 # 插件注册与公共类型导出
+├── types.ts                 # 材料和投影状态类型
+├── context/
+│   └── context.ts           # 快照渲染、替换与上下文注入
+├── state/
+│   ├── projection.ts        # 从工具事件维护资料状态
+│   └── snapshot.ts          # 跟踪最新已提交的快照消息
+└── tools/
+    └── hide.ts              # materials_hide 工具
+```
+
 ## 状态与更新
 
 ```ts

@@ -1,8 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { MaterialsState } from './types.js'
-import './snapshot.js'
+import type { MaterialsState } from '../types.js'
+import '../state/snapshot.js'
 
 const PLACEHOLDER = 'This materials snapshot is superseded. Use the latest materials snapshot.'
 

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import type { Material, MaterialsState, PendingCall } from './types.js'
+import type { Material, MaterialsState, PendingCall } from '../types.js'
 
 const urlSchema = z.string().refine(value => {
   try {

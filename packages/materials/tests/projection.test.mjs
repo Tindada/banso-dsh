@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applyMaterials, materialsProjection } from '../lib/projection.js'
+import { applyMaterials, materialsProjection } from '../lib/state/projection.js'
 const A = 'https://example.com/a', B = 'https://example.com/b'
 function fixture() {
   let state = materialsProjection.init(), seq = 0

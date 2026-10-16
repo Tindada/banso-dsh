@@ -9,9 +9,9 @@ import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import * as Materials from '../lib/index.js'
-import { renderMaterials } from '../lib/context.js'
-import { materialsProjection } from '../lib/projection.js'
-import { materialsSnapshotProjection } from '../lib/snapshot.js'
+import { renderMaterials } from '../lib/context/context.js'
+import { materialsProjection } from '../lib/state/projection.js'
+import { materialsSnapshotProjection } from '../lib/state/snapshot.js'
 
 const url = 'https://example.com/a'
 const user = text => createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text }] })
