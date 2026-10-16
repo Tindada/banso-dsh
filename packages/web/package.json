@@ -1,7 +1,6 @@
 {
   "name": "banso-dsh-web",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -59,5 +58,6 @@
     "@deepseek-ai/cordis": "^4.0.4",
     "@deepseek-ai/dsh": "0.2.0-rc.2",
     "playwright": "^1.49.0"
-  }
+  },
+  "description": "Banso research web bundle for DeepSeek Harness"
 }

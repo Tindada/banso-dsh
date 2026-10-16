@@ -1,6 +1,6 @@
 {
   "name": "banso-dsh-materials",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Web research tools, session-local materials and evidence snapshots",
   "type": "module",
   "license": "MIT",
@@ -19,7 +19,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test tests/*.test.mjs"
+    "test": "tsc -p tsconfig.json && node --test tests/*.test.mjs",
+    "prepack": "pnpm run clean && pnpm run build",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\""
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2",

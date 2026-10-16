@@ -1,6 +1,6 @@
 {
   "name": "banso-dsh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Banso research bundle for DeepSeek Harness",
   "scripts": {
     "build": "node scripts/copy-base-patch.mjs",

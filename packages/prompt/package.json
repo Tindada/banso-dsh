@@ -1,6 +1,6 @@
 {
   "name": "banso-dsh-prompt",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Banso research instructions and per-turn reference time",
   "type": "module",
   "license": "MIT",
@@ -19,7 +19,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test tests/*.test.mjs"
+    "test": "tsc -p tsconfig.json && node --test tests/*.test.mjs",
+    "prepack": "pnpm run clean && pnpm run build",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\""
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.4"
