@@ -166,7 +166,11 @@ packageExtensionsChecksum: sha256-KwSq86yx2FGfh5vAse2/HLiEa6I3QJNIgBxtxjqAIP4=
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@deepseek-ai/dsh':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(258d4c892947101b310afbb958764fb9)
 
   packages/banso:
     dependencies:
