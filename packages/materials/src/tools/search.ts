@@ -8,6 +8,7 @@ export function wrapWebTool(original: ToolDefinition): ToolDefinition {
   if (original.name === 'web_search') {
     return {
       ...original,
+      description: 'Search the web for sources. Source URLs, titles, and available snippets appear in the next materials snapshot with stable handles; matching hidden materials become visible again. Returns a compact receipt and an optional search answer.',
       output: {
         ...original.output,
         render: (_args, value: unknown) => {

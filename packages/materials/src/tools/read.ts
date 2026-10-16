@@ -24,7 +24,7 @@ type ReadResult = InferValue<typeof schema>
 export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition {
   return defineTool({
     name: 'web_read',
-    description: 'Read one material handle (S1) or full HTTP(S) URL and extract evidence for a focus. Saved pages are reused. Call again with a new focus for follow-up questions. Evidence and new handles appear in the next materials snapshot.',
+    description: 'Extract evidence from a page for a given focus. Saved pages are reused, not refreshed. Appends evidence, not page text, to the next materials snapshot and makes the material visible. New sources receive handles. Returns a status receipt.',
     parameters: {
       target: { type: 'string', required: true, description: 'One material handle or full HTTP(S) URL.' },
       focus: { type: 'string', required: true, description: 'The question or facts to extract from this source.' },

@@ -85,6 +85,7 @@ test('first request gets time; steering and later steps retain it; next turn ref
     assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
     const system = textOf(request.messages.find(msg => msg.role === 'system'))
     assert.ok(system.includes(RESEARCH_PROMPT))
+    assert.doesNotMatch(system, /\b(?:web_search|web_read|web_fetch|materials_hide)\b|materials snapshot/)
   }
   agent.followup(message('再研究一次'))
   await agent.whenIdle()

@@ -17,7 +17,7 @@ const schema = {
 export function createHideTool(ctx: Context): ToolDefinition {
   return defineTool({
     name: 'materials_hide',
-    description: 'Hide entire materials that are no longer needed from the next materials snapshot. Saved source data, pages and evidence are retained. Searching the same URL again or reading the material with web_read makes it visible again. Unknown handles do not prevent hiding valid materials.',
+    description: 'Hide entire materials from the next materials snapshot, retaining saved source data, pages, and evidence. Searching the same URL again or reading the material restores visibility.',
     parameters: {
       handles: {
         type: 'array',

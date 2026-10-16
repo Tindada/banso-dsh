@@ -30,9 +30,9 @@ src/
 
 ## 工具提示词
 
-`src/context/guidance.ts` 管理主研究模型的工具使用规则：在 `system-prompt/assemble` 阶段替换原生 `tool:web_search` 文本，并注册 `tool:web_read`、`tool:web_fetch` 和 `tool:materials_hide`。规则说明短回执、资料快照、handle、按 focus 提取及外部数据的信任边界；不负责整体研究策略或最终回答格式。
+`src/context/guidance.ts` 注册独立的 `Materials snapshot:` 公共声明，说明快照的参考角色、内容组成、工具交互入口和外部内容的信任边界。工具自身的 description 说明操作行为，包括快照更新、正文复用、短回执和隐藏恢复；参数描述说明具体输入。
 
-规则分别随对应工具在当前作用域的可见性生效。替换保留其他 section、工具 schema 和上下文。卸载插件后恢复原生搜索规则并移除阅读规则。不修改 DSH 源码，也不影响 read 内部独立提取模型的提示词。
+系统提示词只为 `web_read` 保留 focus 追问和证据局限指引，为 `materials_hide` 保留材料筛选原则，随对应工具在当前作用域的可见性生效。search/fetch 不再重复添加系统指引；原生 `tool:web_search` 文本被置空，搜索 description 由包装层补充快照语义。卸载后恢复原生搜索描述与指引，并移除本插件的公共声明和工具指引。不修改 DSH 源码，也不影响 read 内部独立提取模型的提示词。
 
 ## 阅读模式
 
@@ -127,7 +127,7 @@ materials_hide({ handles: ["S3", "S7"] })
 
 工具只读取当前会话状态并返回结果，由正常提交的 `tool/result` metadata 驱动投影设置 `hidden: true`，下一份快照生效；不会直接修改投影或消息。缺少 agent、材料投影、空数组以及取消按工具错误处理，不提交隐藏操作。
 
-本包在系统提示的工具说明中引导模型收到搜索结果后检查最新快照，批量隐藏明显无关的材料后继续研究，保留支持结论、解释分歧或追查未决问题所需的材料。说明随 `materials_hide` 的工具可见性显示。
+本包在系统提示的工具说明中引导模型隐藏明显无关的材料，保留支持结论、解释分歧或追查未决问题所需的材料。说明随 `materials_hide` 的工具可见性显示。
 
 不提供独立恢复工具。再次搜索到同一 URL 或通过 handle／URL 阅读会自动重新展示材料。阅读正常返回有效 metadata 时，即使抓取或提取失败也重新展示已有材料；非法输入、未知 handle 和整体取消不改变可见性。
 

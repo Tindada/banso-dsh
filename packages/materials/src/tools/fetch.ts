@@ -6,7 +6,7 @@ import { getPage, pageSchema } from './page.js'
 export function createFetchTool(ctx: Context, config: { timeoutMs: number }): ToolDefinition {
   return defineTool({
     name: 'web_fetch',
-    description: 'Fetch one material handle (S1) or full HTTP(S) URL for direct reading. Saved pages are reused, not refreshed. Page text and new handles appear in the next materials snapshot.',
+    description: 'Fetch page text for direct reading. Saved pages are reused, not refreshed. Page text appears in the next materials snapshot and the material becomes visible. New sources receive handles. Returns a status receipt.',
     parameters: {
       target: { type: 'string', required: true, description: 'One material handle or full HTTP(S) URL.' },
     },
