@@ -2,13 +2,13 @@
 
 基于 DeepSeek Harness 的研究助手，支持网页搜索、阅读和证据提取。通过 Python SDK 使用，无需下载 DSH 或 Banso 源码。
 
-可通过 [Python SDK](#python-sdknpm-安装) 或 [Web 聊天](#web-聊天源码安装) 使用。以下 SDK 安装步骤使用 `banso-dsh@0.1.0`。
+可通过 [Python SDK](#python-sdknpm-安装) 或 [Web 聊天](#web-聊天npm-安装) 使用。以下步骤使用 `banso-dsh@0.1.1` 和 `banso-dsh-web@0.1.0`。
 
 ## Python SDK（npm 安装）
 
 ### 1. 安装
 
-准备 **Node.js 24、pnpm、Python 3.12 和 uv**。以下为 macOS / Linux 命令，默认使用 `~/.dsh` 存放配置和会话。若此前设置过 `DSH_HOME`，先执行 `unset DSH_HOME`。
+准备 **Node.js 24、pnpm 12.8.1、Python 3.12 和 uv**。以下为 macOS / Linux 命令，默认使用 `~/.dsh` 存放配置和会话。若此前设置过 `DSH_HOME`，先执行 `unset DSH_HOME`。
 
 创建工作目录并安装 DSH：
 
@@ -19,13 +19,19 @@ cd banso-demo
 pnpm add @deepseek-ai/dsh@0.2.0-rc.2
 ```
 
-若提示 `ERR_PNPM_IGNORED_BUILDS`，执行 `pnpm approve-builds`，选择提示中的依赖并确认构建，再继续安装 Banso：
+批准工作目录中 DSH 依赖的构建，在交互列表中用空格选择提示的依赖，回车确认：
 
 ```bash
-pnpm exec dsh plugin --profile banso-dsh add banso-dsh@0.1.0
+pnpm approve-builds
 ```
 
-只需安装入口包，其他 Banso 插件自动安装。若此步提示 `koffi` 构建被拦截，执行并批准：
+构建完成后安装 Banso：
+
+```bash
+pnpm exec dsh plugin --profile banso-dsh add banso-dsh@0.1.1
+```
+
+只需安装入口包，其他 Banso 插件自动安装。profile 是独立的依赖目录，还需在其中批准 `koffi` 构建：
 
 ```bash
 pnpm exec dsh plugin --profile banso-dsh exec pnpm approve-builds
@@ -122,7 +128,7 @@ finally:
 
 SDK 会自动启动和关闭 DSH，正常结束时输出 `completed` 和回答。macOS 长时间运行可使用 `caffeinate -i .venv/bin/python ask.py`，并保持开盖。
 
-## Web 聊天（源码安装）
+## Web 聊天（npm 安装）
 
 Web 界面支持单会话文字聊天、连续追问、流式回答、停止和错误提示。使用独立的 `banso-web` profile，无需 Python SDK。执行期间显示搜索、阅读状态及可折叠详情，本轮结束后隐藏；模型伴随工具调用的说明临时显示，回答保留。
 
@@ -130,28 +136,35 @@ Web 界面支持单会话文字聊天、连续追问、流式回答、停止和�
 
 ### 1. 安装
 
-准备 Node.js 24、pnpm 12.8.1 和 Git。Web 目前通过源码安装，在终端执行；已有仓库时直接进入仓库目录：
+准备 Node.js 24 和 pnpm 12.8.1，无需下载源码或安装 Python SDK。以下命令使用默认的 `~/.dsh`；若此前设置过 `DSH_HOME`，先执行 `unset DSH_HOME`。
+
+创建工作目录并安装 DSH；若已按上面的 SDK 步骤安装，可复用该工作目录，直接从创建 Web profile 开始：
 
 ```sh
-git clone https://github.com/Tindada/banso-dsh.git
-cd banso-dsh
-pnpm install
-pnpm build
+mkdir banso-web-demo
+cd banso-web-demo
+pnpm add @deepseek-ai/dsh@0.2.0-rc.2
+pnpm approve-builds
 ```
 
-后续命令均在仓库根目录执行。以下示例使用默认的 `~/.dsh`；若终端已设置 `DSH_HOME`，安装和启动都会使用该目录，应保持一致。
-
-创建并启用 Web profile，将 `/absolute/path/to/banso-dsh` 替换为仓库绝对路径：
+在交互列表中选择提示的依赖并确认构建。然后创建 Web profile，安装两个入口包并单独批准 profile 中的 `koffi` 构建：
 
 ```sh
-pnpm exec dsh plugin --profile banso-web add 'link:/absolute/path/to/banso-dsh/packages/banso'
-pnpm exec dsh plugin --profile banso-web add 'link:/absolute/path/to/banso-dsh/packages/web'
+pnpm exec dsh plugin --profile banso-web add banso-dsh@0.1.1 banso-dsh-web@0.1.0
+pnpm exec dsh plugin --profile banso-web exec pnpm approve-builds
+```
+
+其他插件由依赖关系自动安装。启用 Web 组合，注意两个 bundle 的顺序：
+
+```sh
 pnpm exec dsh plugin --profile banso-web exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh","banso-dsh-web"]'
 ```
 
+后续命令均在当前工作目录执行。若使用自定义 `DSH_HOME`，安装插件、启用 profile 和启动时必须保持一致。
+
 ### 2. 配置密钥
 
-在仓库根目录创建 `.env`；已有文件时编辑并保留其他配置：
+在当前工作目录创建 `.env`；已有文件时编辑并保留其他配置：
 
 ```dotenv
 DEEPSEEK_API_KEY=你的 DeepSeek API key

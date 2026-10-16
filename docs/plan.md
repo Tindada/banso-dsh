@@ -39,20 +39,33 @@
 
 ## 最小 Web 聊天
 
-2026-10-15 新增 `web`、`ui` 两个未发布包。`banso-web` profile 按顺序加载 `banso-dsh` 和 `banso-dsh-web`，由后者停用 SDK 启动和 stdio 插件，追加官方通信、会话接口及依赖；`base/`、`banso/` 源码不变。复用已发布 DSH 的静态启动壳、renderer、ui-session 作用域适配及浏览器会话对象层，自定义根页面提供纯文本聊天、连续追问、流式回答、停止和错误提示。
+2026-10-15 新增 `web`、`ui` 两个包（当时尚未发布）。`banso-web` profile 按顺序加载 `banso-dsh` 和 `banso-dsh-web`，由后者停用 SDK 启动和 stdio 插件，追加官方通信、会话接口及依赖；`base/`、`banso/` 源码不变。复用已发布 DSH 的静态启动壳、renderer、ui-session 作用域适配及浏览器会话对象层，自定义根页面提供纯文本聊天、连续追问、流式回答、停止和错误提示。
 
 Web patch 默认选择官方 `deepseek-official` 搜索，加载 `dsh-web-search-deepseek`，搜索超时为 60 秒；阅读仍为 Jina，原 SDK 组合的 Tavily 默认值不变。
 
 不提供历史列表、刷新恢复、Markdown 或资料面板。当前会话 ID 只存在页面内存，刷新后首次发送创建新会话；服务端 JSONL 持久化继续保留。刷新/关闭页面不等同于停止任务。
 
-新增验证：消息投影单元测试、真实 DSH CLI + 临时 profile/home + 无头 Chromium 的聊天链路，以及 `--help` 不绑定端口。浏览器测试使用模拟模型，通过真实 HTTP/WebSocket、会话接口和默认 agent loop 验证流式回答、追问、取消、错误后继续聊天和刷新新建；模拟模型还检查 Banso 提示词及研究工具已加载。workspace 构建和类型检查、原有三项 Banso 组合回归测试通过。本机浏览器验证使用已有 Chromium 1208；未验证真实在线模型/搜索服务或全新机器安装。
+新增验证：消息投影单元测试、真实 DSH CLI + 临时 profile/home + 无头 Chromium 的聊天链路，以及 `--help` 不绑定端口。浏览器测试使用模拟模型，通过真实 HTTP/WebSocket、会话接口和默认 agent loop 验证流式回答、追问、取消、错误后继续聊天和刷新新建；模拟模型还检查 Banso 提示词及研究工具已加载。workspace 构建和类型检查、原有三项 Banso 组合回归测试通过。本机浏览器验证使用已有 Chromium 1208；当时未验证真实在线模型/搜索服务或全新机器安装；后续在线验证见下方发布状态。
 
-安装和启动见 [Web 聊天](../README.md#web-聊天源码安装)，源码构建和测试见 [开发文档](development.md#web-开发与调试)，使用边界见 [Web 说明](../packages/web/README.md)。
+安装和启动见 [Web 聊天](../README.md#web-聊天npm-安装)，源码构建和测试见 [开发文档](development.md#web-开发与调试)，使用边界见 [Web 说明](../packages/web/README.md)。
 
 Web 聊天已增加逐次搜索、阅读状态及可折叠详情，复用官方会话工具事件；执行期间显示并行调用及结果，本轮完成、失败或停止后隐藏；模型的工具调用说明仅临时显示，回答保留。不增加后端接口。
 
 ## 发布状态
 
 2026-10-09 七个包已发布 `0.1.0`。本机独立目录从 npm 安装 DSH 后，仅指定入口包 `banso-dsh@0.1.0`，其余六包自动获取；完成配置合成和 Python SDK 在线验证，一次搜索返回八个来源，两次网页抓取及证据提取成功，正常结束。profile 中需单独批准 koffi 构建；missing peer 提示与 DSH 从宿主解析依赖的设计有关，本次运行未受影响。此验证不使用源码链接或 tarball，但未覆盖全新机器和完整功能。
+
+2026-10-16 完成本轮发布：
+
+| 包 | 发布版本 |
+| --- | --- |
+| `banso-dsh`、`banso-dsh-base`、`banso-dsh-prompt`、`banso-dsh-materials`、`banso-dsh-web-fetch-jina`、`banso-dsh-web-search-tavily` | `0.1.1` |
+| `banso-dsh-web`、`banso-dsh-ui` | `0.1.0`（首次发布） |
+
+发布前，用户完成依赖安装、类型检查、构建和包测试；检查八个 pnpm tarball 的依赖版本、入口、README、LICENSE 和第三方声明。在仓库之外使用独立 DSH home/profile 安装本次 tarball，用户确认 Python SDK 搜索阅读脚本和 Web 验证通过。
+
+发布后，在新的临时工作目录从 npm 安装 DSH `0.2.0-rc.2`，只指定 `banso-dsh@0.1.1` 和 `banso-dsh-web@0.1.0` 两个入口包，不使用 overrides、tarball 或源码链接。分别批准工作目录的 DSH 依赖构建和 profile 中的 koffi 构建，再切换 bundle 组合验证 SDK 与 Web；用户确认两条路径均通过。Python SDK 使用 `0.1.5rc1`。
+
+本次覆盖本机独立目录安装和真实服务试跑，不等同于全新机器、所有平台或完整功能验证。安装、配置和启动需使用同一个 `DSH_HOME`；SDK 显式传入的 `dsh_home` 也必须与之对应。
 
 用户安装步骤见 [项目 README](../README.md)，源码开发见 [开发文档](development.md)，打包检查见 [发布文档](releasing.md)。

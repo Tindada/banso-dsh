@@ -9,7 +9,7 @@
 在已安装 DSH `0.2.0-rc.2` 的目录执行：
 
 ```sh
-pnpm exec dsh plugin --profile banso-base add banso-dsh-base@0.1.0
+pnpm exec dsh plugin --profile banso-base add banso-dsh-base@0.1.1
 pnpm exec dsh plugin --profile banso-base exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh-base"]'
 ```
 

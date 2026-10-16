@@ -51,6 +51,14 @@ tar -xOf /tmp/banso-dsh-release/banso-dsh-materials-0.1.1.tgz package/package.js
 
 先在仓库之外的临时项目、独立 `DSH_HOME` 和 profile 中验证打包产物。若依赖版本尚未发布，应同时使用本次相关 tarball，避免误用 npm 上的旧包。检查配置合成和所需的 SDK 或 Web 启动路径；真实在线试跑会消耗 API 额度。
 
+用 DSH 的 `plugin --profile <名称> add` 创建 profile 并安装入口包。验证未发布的 tarball 时，在该 profile 的 `pnpm-workspace.yaml` 中设置 `overrides`，将所有本次 Banso 依赖指向对应 tarball；保留文件中已有配置。仅添加入口 tarball 不能保证传递依赖也来自本次产物。
+
+安装过程中有两个独立的构建审批位置：安装 DSH 后在工作目录执行 `pnpm approve-builds`；安装入口包后执行 `pnpm exec dsh plugin --profile <名称> exec pnpm approve-builds`，批准 profile 中的 koffi 构建。检查 profile 的 `package.json` 和 `pnpm list --depth 0`，确认依赖安装完成，再设置 `dsh.profile.bundles`；设置 bundle 列表本身不会安装包。
+
+安装、审批、配置和启动必须使用同一个 `DSH_HOME`。Python 测试脚本显式设置的 `dsh_home` 应指向该目录，不能继续引用旧验证环境。
+
 准备发布时逐包确认 npm 身份、目标版本、registry 和 dist-tag，按依赖顺序发布。使用已完成验证的 tarball 发布；若重新打包，需重新检查产物。发布后，再从 npm 在独立目录仅安装入口包，确认依赖能够自动获取。Web/UI 只有完成自己的发布与安装验证后，才能将源码启动说明改为 npm 安装说明。
+
+发布后的验证使用新的工作目录和 DSH home，不复制旧 profile 或 overrides，按根 README 从 npm 安装固定版本的入口包，再验证 SDK 和 Web。密钥配置可以复用，安装依赖与 profile 配置应重新创建。
 
 记录日期、包版本、DSH/SDK 版本、安装来源、验证路径和未覆盖范围。将发布状态同步到规划和根 README；测试数量只作为有日期或阶段背景的历史记录，不作为长期有效的当前状态。

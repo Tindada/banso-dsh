@@ -30,7 +30,14 @@ pnpm exec dsh --profile banso-dsh --dump-config
 
 ## Web 开发与调试
 
-首次安装、配置和启动见 [Web 聊天](../README.md#web-聊天源码安装)。修改 UI 后运行 `pnpm build`，重启服务并刷新页面；当前没有开发热更新。修改 Web patch 后也需重启。
+先完成上面的源码构建，再创建链接到源码的 Web profile；将路径替换为本仓库绝对路径：
+
+```sh
+pnpm exec dsh plugin --profile banso-web add 'link:/absolute/path/to/banso-dsh/packages/banso' 'link:/absolute/path/to/banso-dsh/packages/web'
+pnpm exec dsh plugin --profile banso-web exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh","banso-dsh-web"]'
+```
+
+密钥配置和启动见 [Web 聊天](../README.md#web-聊天npm-安装)，开发时在仓库根目录放置 `.env` 并启动。修改 UI 后运行 `pnpm build`，重启服务并刷新页面；当前没有开发热更新。修改 Web patch 后也需重启。
 
 ```sh
 pnpm exec dsh --profile banso-web --dump-config
