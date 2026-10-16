@@ -2,6 +2,8 @@
 
 将 Python BansoAgain 的新闻研究流程迁入 DSH，在学习框架的同时保留关键业务语义。当前仍处于首版开发，范围不含本地语料库，优先复用 DSH 已有能力。
 
+待优化项见 [优化 TODO](todos.md)。
+
 ## 当前能力
 
 依赖对齐 DSH `0.2.0-rc.2`，使用 pnpm workspace：
