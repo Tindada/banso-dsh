@@ -6,7 +6,7 @@
 # Config patches replace the whole object: preserve Jina and disabled native fetch.
 - id: web
   config:
-    searchProvider: deepseek-official
+    searchProvider: deepseek-search-api
     fetchProvider: jina
 - id: tool-web
   config:
@@ -14,10 +14,8 @@
     fetch: false
     searchTimeoutMs: 60000
 - insert:
-    - id: web-search-deepseek
-      name: '@deepseek-ai/dsh-web-search-deepseek'
-      config:
-        apiKeyEnv: DEEPSEEK_API_KEY
+    - id: web-deepseek-api
+      name: '@deepseek-ai/dsh-web-deepseek-api'
     - id: banso-web-startup
       name: banso-dsh-web
     - id: host-webserver
