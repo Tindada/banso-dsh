@@ -12,7 +12,7 @@ import Loop from '@deepseek-ai/dsh-agent-loop'
 import Llm, { LlmAdapter, createUserMessage } from '@deepseek-ai/dsh-llm'
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
-import Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import * as Timeout from '@deepseek-ai/dsh-tool-call-timeout-policy'
@@ -20,9 +20,6 @@ import Web from '@deepseek-ai/dsh-web'
 import * as WebTools from '@deepseek-ai/dsh-tool-web'
 import * as Materials from 'banso-dsh-materials'
 import * as BansoPrompt from 'banso-dsh-prompt'
-import Invariants from '@deepseek-ai/dsh-invariants'
-import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
-import * as LoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 
 const url = 'https://example.com/article'
 class Adapter extends LlmAdapter {
@@ -73,7 +70,6 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig, mode = 'ex
   await ctx.plugin(Jsonl, { root, compression: 'none' })
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(BansoPrompt)
-  for (const plugin of [Invariants, SessionInvariant, LoopInvariant]) await ctx.plugin(plugin)
   await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: jinaConfig ? 'jina' : 'fixture' })
   ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search() {
     return { sources: [{ url, title: 'Article', snippet: 'Preview' }], truncated: false }

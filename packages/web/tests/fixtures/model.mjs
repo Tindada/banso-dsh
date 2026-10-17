@@ -32,7 +32,7 @@ class Model extends LlmAdapter {
       const tail = request.messages.slice(request.messages.indexOf(last) + 1);
       const results = tail.filter(message => message.role === 'tool');
       const calls = results.length === 0 ? [{ name: 'web_search', args: { queries: ['W&B recent changes ' + 'long keyword '.repeat(12)] } }] :
-        results.length === 1 ? [{ name: 'web_read', args: { target: 'S1', focus: text === 'cancel-tools' ? 'cancel' : 'facts' } }, { name: 'web_read', args: { target: 'S2', focus: text === 'cancel-tools' ? 'cancel' : 'fail' } }] : [];
+        results.length === 1 ? [{ name: 'web_read', args: { target: 'S1', mode: 'extract', focus: text === 'cancel-tools' ? 'cancel' : 'facts' } }, { name: 'web_read', args: { target: 'S2', mode: 'extract', focus: text === 'cancel-tools' ? 'cancel' : 'fail' } }] : [];
       if (calls.length) {
         const preamble = results.length === 0 ? '我来搜索相关来源。' : '我找到了相关来源，现在开始阅读。';
         yield { type: 'block-start', index: 0, blockType: 'text' };

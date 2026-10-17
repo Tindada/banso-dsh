@@ -1,6 +1,8 @@
 # Banso 基础 SDK bundle
 
-`banso-dsh-base` 提供 DeepSeek 模型调用、默认 agent loop、Python SDK 接入、会话持久化、请求重试和运行时检查。不包含搜索、网页阅读工具或 Web UI。
+`banso-dsh-base` 提供 DeepSeek 模型调用、默认 agent loop、Python SDK 接入、会话持久化、请求重试和 Session 工作目录服务。不包含搜索、网页阅读工具或 Web UI。
+
+工作目录服务通过文件系统验证目录，并提供必需的模型上下文；不加载面向模型的目录切换工具。
 
 使用完整研究功能请安装 [Banso bundle](https://github.com/Tindada/banso-dsh/blob/main/packages/banso/README.md)，无需额外加载本包。
 

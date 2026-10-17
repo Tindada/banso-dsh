@@ -49,14 +49,17 @@ async function harness(t, config = {}) {
 test('configured research prompt replaces defaults literally and retains reference time', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date(T1) })
   const researchPrompt = 'Custom research rules with {{literal}} text.'
-  const { adapter, create } = await harness(t, { researchPrompt })
+  const { ctx, adapter, create } = await harness(t, { researchPrompt })
   const agent = await create('custom-prompt')
   agent.followup(message('研究'))
   await agent.whenIdle()
   const request = adapter.requests[0]
   const system = textOf(request.messages.find(msg => msg.role === 'system'))
   assert.ok(system.includes(researchPrompt))
-  assert.ok(!system.includes(RESEARCH_PROMPT))
+  const sections = (await ctx.systemPrompt.assemble({ agent, scope: agent })).sections
+    .filter(section => section.name === 'banso:research')
+  assert.equal(sections.length, 1)
+  assert.equal(sections[0].text, researchPrompt)
   assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
 })
 
@@ -84,7 +87,8 @@ test('first request gets time; steering and later steps retain it; next turn ref
     assert.equal(snapshots(request).length, 1)
     assert.match(textOf(snapshots(request)[0]), new RegExp(T1, 'u'))
     const system = textOf(request.messages.find(msg => msg.role === 'system'))
-    assert.ok(system.includes(RESEARCH_PROMPT))
+    assert.equal((await ctx.systemPrompt.assemble({ agent, scope: agent })).sections
+      .find(section => section.name === 'banso:research')?.text, RESEARCH_PROMPT)
     assert.doesNotMatch(system, /\b(?:web_search|web_read|web_fetch|materials_hide)\b|materials snapshot/)
   }
   agent.followup(message('再研究一次'))
@@ -147,7 +151,8 @@ test('tool execution and the following model step keep the original reference ti
 
 test('agents are isolated and plugin disposal removes registrations and listener', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date(T1) })
-  const { ctx, fiber, adapter, create } = await harness(t)
+  const researchPrompt = 'Research rules for disposal verification.'
+  const { ctx, fiber, adapter, create } = await harness(t, { researchPrompt })
   const first = await create('time-first')
   const second = await create('time-second')
   first.followup(message('第一项研究'))
@@ -158,9 +163,11 @@ test('agents are isolated and plugin disposal removes registrations and listener
   const assemble = agent => ctx.systemPrompt.assemble({ agent, scope: agent })
   assert.match(renderContextSnapshot(await assemble(first)), new RegExp(T1, 'u'))
   assert.match(renderContextSnapshot(await assemble(second)), new RegExp(T2, 'u'))
+  assert.ok(renderPrompt(await assemble(first)).includes(researchPrompt))
   await fiber.dispose()
   assert.equal(renderContextSnapshot(await assemble(first)), '')
-  assert.ok(!renderPrompt(await assemble(first)).includes(RESEARCH_PROMPT))
+  assert.ok(!(await assemble(first)).sections.some(section => section.name === 'banso:research'))
+  assert.ok(!renderPrompt(await assemble(first)).includes(researchPrompt))
   // Reloading must not resurrect state retained by the disposed plugin.
   await ctx.plugin(BansoPrompt)
   assert.equal(renderContextSnapshot(await assemble(first)), '')

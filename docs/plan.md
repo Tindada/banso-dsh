@@ -6,7 +6,7 @@
 
 ## 当前能力
 
-依赖对齐 DSH `0.2.0-rc.2`，使用 pnpm workspace：
+源码依赖声明已调整为 DSH `0.2.1-rc.2`、Cordis `4.0.5`（2026-10-17）；安装与锁文件更新已完成，类型检查及构建通过；各包现有测试共 74 项通过，其中 Web 2 项在补齐 fixture 的阅读模式参数后单独重跑通过。Python SDK 入口及真实在线服务尚未验证。已移除 invariant 组合及测试加载，base 增加文件系统与工作目录服务，Web 增加 remote-access 并复用 base 文件系统。已发布版本及下文历史验证仍基于 DSH `0.2.0-rc.2`；新版验证范围以上述结果为准。项目使用 pnpm workspace：
 
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
 - `web-search-tavily` 提供搜索，网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，保留 DSH HTTP Fetch，可通过 `fetchProvider: http` 切回。

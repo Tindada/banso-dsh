@@ -41,6 +41,8 @@
       name: "@deepseek-ai/dsh-typert-loader"
     - id: api-gateway
       name: "@deepseek-ai/dsh-api-gateway"
+    - id: remote-access
+      name: "@deepseek-ai/dsh-api-remote-access"
     - id: api-remotes
       name: "@deepseek-ai/dsh-api-remotes"
     - id: api-session-controller
@@ -67,8 +69,6 @@
       name: "@deepseek-ai/dsh-client-file-upload"
     - id: commands
       name: "@deepseek-ai/dsh-commands"
-    - id: fs-local
-      name: "@deepseek-ai/dsh-fs-local"
     - id: file-reference-local
       name: "@deepseek-ai/dsh-file-reference-local"
     - id: workspace
