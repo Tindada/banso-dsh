@@ -8,8 +8,6 @@
 - insert:
     - id: banso-prompt
       name: banso-dsh-prompt
-      config:
-        researchPrompt: ""
 
 - insert:
     - id: web
