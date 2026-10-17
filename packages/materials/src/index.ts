@@ -1,3 +1,4 @@
+import { registerResearchBudget } from './budget.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import z from '@deepseek-ai/schemastery'
@@ -15,8 +16,9 @@ export type { MaterialsSnapshotState } from './state/snapshot.js'
 export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents', 'tools', 'web', 'llm', 'systemPrompt']
 
-export interface Config extends ReadConfig {}
+export interface Config extends ReadConfig { researchBudget: number }
 export const Config: z<Config> = z.object({
+  researchBudget: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(15),
   provider: z.string(),
   model: z.string(),
   maxInputBytes: z.number().step(1).min(1).default(200_000),
@@ -34,5 +36,6 @@ export function apply(ctx: Context, config: Config): void {
   ctx.tools.register(createReadTool(ctx, config))
   registerWebGuidance(ctx)
   registerSearchWrapper(ctx)
-  registerMaterialsContext(ctx)
+  registerResearchBudget(ctx, config.researchBudget)
+  registerMaterialsContext(ctx, config.researchBudget)
 }

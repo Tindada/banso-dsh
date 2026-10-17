@@ -298,7 +298,7 @@ test('configuration validates paired routes and positive budgets', () => {
     assert.throws(() => Materials.Config(value))
   }
   for (const value of [{ provider: 'mock' }, { model: 'extract' }]) {
-    assert.throws(() => Materials.apply({}, value), /configured together/)
+    assert.throws(() => Materials.apply({}, Materials.Config(value)), /configured together/)
   }
 })
 

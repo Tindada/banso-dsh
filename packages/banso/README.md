@@ -30,3 +30,5 @@
 会话默认保存到 `~/.dsh/sessions-banso-base`，可通过 `DSH_HOME` 更换 home 位置。
 
 源码构建、链接 profile 和测试见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md)。
+
+组合默认启用 materials 的共享研究预算：每 turn 最多允许 15 次 search/read 调用尝试进入执行，失败和取消也消耗次数。可在 `banso-materials` 的配置中设置 `researchBudget`（非负安全整数，0 禁用研究调用）。尝试次数可能因被拒绝的调用超过额度；材料跨 turn 保留。详见 materials README 的共享研究预算说明。

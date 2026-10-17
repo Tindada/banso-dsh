@@ -15,11 +15,15 @@
 - `materials` 包装原生 search 的短回执；read 使用扁平结果记录模式、可选正文、证据及错误。extract 默认沿用主模型，可独立配置；输入超预算报错，不分块。direct 不调用提取 LLM。Banso 关闭原生 fetch 工具，加载 DSH 工具超时策略。
 - `materials` 从工具日志保存正文、稳定 handle 和按 focus 追加的证据；提供 `materials_hide(handles)` 批量隐藏快照条目，保留底层材料，再次搜索命中同一 URL 或有效阅读结果会自动重新展示。全部隐藏时用空快照替换旧快照。提取失败保留正文与旧证据；extract 快照不展示全文，有证据后隐藏 snippet；direct 快照展示正文，有正文后隐藏 snippet，旧快照替换为占位。支持 JSONL 恢复和插件重载。
 
-`stateVersion` 为 `2`，材料逐条记录 displayMode，同一 session 可切换或混合阅读方式。不支持旧 web_fetch 或无 mode 的 web_read 日志恢复；升级后使用新会话。首版没有刷新／过期、证据去重／合并、长文分块、上下文总量控制、长期资料库、业务预算或引用语义校验。
+`stateVersion` 为 `2`，材料逐条记录 displayMode，同一 session 可切换或混合阅读方式。不支持旧 web_fetch 或无 mode 的 web_read 日志恢复；升级后使用新会话。首版没有刷新／过期、证据去重／合并、长文分块、上下文总量控制、长期资料库或引用语义校验。
 
 协议与行为详见 [网页工具与资料插件](../packages/materials/README.md) 和 [提示词插件](../packages/prompt/README.md)。
 
+materials 内置 search/read 共享预算，默认每 turn 15 次，按工具调用尝试计数；工具列表过滤和执行 guard 提供严格执行上限。预算与材料共用 projection 和快照，stateVersion 保持 2。
+
 ## 验证范围
+
+共享研究预算实现后，workspace 类型检查、构建及 materials（40 项）、banso（6 项）测试通过。覆盖严格执行上限、异步前置检查顺序、预算快照、跨 turn 重置、隔离与卸载、日志重放和 JSONL 恢复；使用模拟模型与 provider，未运行付费在线评估。
 
 以下记录各阶段的验证结果，测试数量以当时为准。当前开发与验证命令见 [开发文档](development.md)。
 

@@ -110,14 +110,14 @@ test('search and read feed materials through metadata, survive JSONL and continu
   assert.deepEqual(first.errors, [])
   assert.equal(first.adapter.requests.length, 3)
   const [initial, searched, fetched] = first.adapter.requests
-  assert.equal(snapshots(initial).length, 0)
+  assert.equal(snapshots(initial).length, 1)
   assert.equal(initial.messages[0].role, 'system')
   assert.equal(textOf(initial.messages.find(message => message.source.kind === 'user')), 'research')
   assert.equal(snapshots(searched).length, 1)
   assert.equal(searched.messages.at(-1), snapshots(searched)[0])
   assert.match(textOf(snapshots(searched)[0]), /Search snippet: Preview/)
   assert.equal(snapshots(fetched).length, 1)
-  assert.equal(placeholders(fetched).length, 1)
+  assert.equal(placeholders(fetched).length, 2)
   assert.equal(fetched.messages.at(-1), snapshots(fetched)[0])
   assert.match(textOf(snapshots(fetched)[0]), /Evidence/)
   assert.doesNotMatch(textOf(placeholders(fetched)[0]), /Preview|Evidence/)
@@ -183,10 +183,10 @@ test('search and read feed materials through metadata, survive JSONL and continu
   await restored.whenIdle()
   assert.deepEqual(resumed.errors, [])
   assert.equal(resumed.adapter.requests.length, 3)
-  assert.equal(snapshots(resumed.adapter.requests[0])[0].id, locatorBefore.messageId)
-  assert.equal(snapshots(resumed.adapter.requests[1])[0].id, locatorBefore.messageId)
+  assert.notEqual(snapshots(resumed.adapter.requests[0])[0].id, locatorBefore.messageId)
+  assert.notEqual(snapshots(resumed.adapter.requests[1])[0].id, locatorBefore.messageId)
   assert.notEqual(snapshots(resumed.adapter.requests[2])[0].id, locatorBefore.messageId)
-  assert.equal(placeholders(resumed.adapter.requests[2]).length, 2)
+  assert.equal(placeholders(resumed.adapter.requests[2]).length, 5)
   const after = stateOf(resumed.ctx, restored)
   assert.deepEqual(after.urlIndex, before.urlIndex)
   assert.equal(after.nextHandle, before.nextHandle)
@@ -355,4 +355,68 @@ test('one session switches direct and extract both ways without fetching again',
   const results = agent.session.snapshotEvents().filter(e => e.type === 'tool/result' && e.data.meta?.mode)
   assert.deepEqual(results.map(e => e.data.meta.mode), ['direct', 'extract', 'direct', 'extract'])
   assert.ok(results.slice(1).every(e => e.data.meta.content === undefined))
+})
+
+
+test('shared research budget admits only the first call and resets on the next turn', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'banso-budget-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const h = await setup(root, false)
+  t.after(() => h.ctx.fiber.dispose())
+  await h.ctx.plugin(Materials, { researchBudget: 1 })
+  const { agent } = await h.ctx.agents.create({ sessionId: SessionId('budget'), agentOptions: { provider: 'mock', model: 'mock' } })
+  const calls = []
+  h.ctx.on('tools/pre-execute', async (exec, next) => {
+    if (exec.name === 'web_read' || exec.name === 'web_search') {
+      calls.push(exec.callId)
+      const before = stateOf(h.ctx, agent).budget.used
+      await new Promise(resolve => setTimeout(resolve, 10))
+      assert.equal(stateOf(h.ctx, agent).budget.used, before, 'later calls cannot advance count during prepare')
+    }
+    return next()
+  })
+  h.adapter.stream = async function* (request) {
+    this.requests.push(request)
+    const n = this.requests.length
+    if (n === 1 || n === 2) {
+      for (let index = 0; index < (n === 1 ? 3 : 1); index++) {
+        const id = `budget-${n}-${index}`
+        const name = index === 1 ? 'web_search' : 'web_read'
+        const args = JSON.stringify(name === 'web_search'
+          ? { queries: ['news'] }
+          : { target: `${url}/${n}/${index}`, mode: 'direct' })
+        yield { type: 'block-start', index, blockType: 'tool-call' }
+        yield { type: 'tool-call-delta', index, id, name, argumentsDelta: args }
+        yield { type: 'block-end', index, block: { type: 'tool-call', id, name, arguments: args } }
+      }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+    } else {
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'text-delta', index: 0, text: 'done' }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: 'done' } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+  agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'research' }] }))
+  await agent.whenIdle()
+  assert.deepEqual(h.errors, [])
+  assert.equal(h.fetchCalls.length, 1)
+  assert.deepEqual(calls, ['budget-1-0', 'budget-1-1', 'budget-1-2', 'budget-2-0'])
+  const results = agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
+  assert.equal(results.length, 4)
+  assert.equal(results[0].data.message.isError, false)
+  for (const result of results.slice(1)) {
+    assert.equal(result.data.message.isError, true)
+    assert.equal(textOf(result.data.message), 'Error: Research budget exhausted')
+  }
+  assert.equal(stateOf(h.ctx, agent).budget.used, 4)
+  assert.ok(h.adapter.requests[0].tools.some(tool => tool.name === 'web_read'))
+  assert.ok(h.adapter.requests[1].tools.every(tool => !['web_read', 'web_search'].includes(tool.name)))
+  assert.match(textOf(snapshots(h.adapter.requests[2])[0]), /Attempts used: 4\. Remaining: 0/)
+  const items = structuredClone(stateOf(h.ctx, agent).items)
+  agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'followup' }] }))
+  await agent.whenIdle()
+  assert.equal(stateOf(h.ctx, agent).budget.used, 0)
+  assert.deepEqual(stateOf(h.ctx, agent).items, items)
+  assert.ok(h.adapter.requests.at(-1).tools.some(tool => tool.name === 'web_read'))
 })

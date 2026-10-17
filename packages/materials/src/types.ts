@@ -33,6 +33,7 @@ export interface PendingCall {
 
 /** JSON-only replay state. Treat all values read through stateOf as read-only. */
 export interface MaterialsState {
+  budget: { used: number }
   items: Record<string, Material>
   urlIndex: Record<string, string>
   nextHandle: number

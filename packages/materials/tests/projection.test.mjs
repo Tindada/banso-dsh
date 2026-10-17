@@ -229,3 +229,19 @@ test('obsolete fetch and read results without mode are ignored', () => {
   assert.deepEqual(f.state.items, {})
   assert.deepEqual(f.state.pendingCalls, {})
 })
+
+
+test('research attempts count independently of results and reset without removing materials', () => {
+  const f = fixture()
+  f.emit({ type: 'turn/start', data: { turn: 1 } })
+  f.result(f.read(), success())
+  f.result(f.call(), undefined, { isError: true })
+  f.read() // Cancelled or unfinished attempts still count.
+  f.call('materials_hide', { handles: ['S1'] })
+  assert.equal(f.state.budget.used, 3)
+  assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
+  const items = structuredClone(f.state.items)
+  f.emit({ type: 'turn/start', data: { turn: 2 } })
+  assert.equal(f.state.budget.used, 0)
+  assert.deepEqual(f.state.items, items)
+})

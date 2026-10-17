@@ -1,3 +1,4 @@
+import { isResearchTool } from '../budget.js'
 import { z } from 'zod'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -66,6 +67,7 @@ const materialSchema = sourceSchema.extend({
 })
 
 const stateSchema: z.ZodType<MaterialsState> = z.object({
+  budget: z.object({ used: z.number().int().nonnegative() }),
   items: z.record(z.string(), materialSchema),
   urlIndex: z.record(z.string(), z.string()),
   nextHandle: z.number().int().positive(),
@@ -95,6 +97,7 @@ function upsert(state: MaterialsState, url: string, update: (item: Material) => 
 }
 
 export function applyMaterials(state: MaterialsState, event: SessionEvent): MaterialsState {
+  if (event.type === 'turn/start') return { ...state, budget: { used: 0 } }
   if (event.type === 'tool/call') {
     const call = trackCall(event)
     return call === undefined
@@ -102,6 +105,7 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
       : {
           ...state,
           pendingCalls: { ...state.pendingCalls, [event.seq]: call },
+          budget: { used: state.budget.used + (isResearchTool(call.name) ? 1 : 0) },
         }
   }
 
@@ -190,6 +194,6 @@ export const materialsProjection: ProjectionDefinition<'bansoMaterials'> = {
   key: 'bansoMaterials',
   stateVersion: 2,
   stateSchema,
-  init: () => ({ items: {}, urlIndex: {}, nextHandle: 1, pendingCalls: {} }),
+  init: () => ({ budget: { used: 0 }, items: {}, urlIndex: {}, nextHandle: 1, pendingCalls: {} }),
   apply: applyMaterials,
 }

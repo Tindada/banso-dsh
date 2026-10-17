@@ -139,7 +139,7 @@ test('snapshots remove hidden materials, replace all-hidden snapshots and show r
 
 test('rendering is deterministic, numerically ordered and preserves source information', () => {
   const state = materialsProjection.init()
-  assert.equal(renderMaterials(state), undefined)
+  assert.match(renderMaterials(state), /Research budget: 15\. Attempts used: 0\. Remaining: 15/)
   for (const handle of ['S10', 'S2', 'S1']) state.items[handle] = { handle, url: `${url}/${handle}` }
   state.items.S1 = {
     ...state.items.S1, title: '中文标题', snippet: '中文摘要', publishedAt: '2026-10-05',
@@ -183,7 +183,7 @@ test('material updates, unchanged turns, retries, reload, surface replacement an
   assert.deepEqual(locator(h.ctx, h.agent), original)
   const other = await h.ctx.agentLoop.create(SessionId('other'), { provider: 'mock', model: 'mock' })
   await h.run(other)
-  assert.equal(snapshots(h.adapter.requests.at(-1).messages).length, 0)
+  assert.equal(snapshots(h.adapter.requests.at(-1).messages).length, 1)
   // Empty assistant nodes are omitted by deriveMessages; sequence lookup must not zip arrays.
   h.agent.session.append('assistant/message', {
     turn: 1, step: 0, message: createAssistantMessage({ content: [], source: { provider: 'mock', model: 'mock' } }),
@@ -275,7 +275,7 @@ test('direct snapshots show one body, suppress evidence, preserve snippets until
   h.recordRead()
   await h.run()
   assert.match(textOf(snapshots(h.adapter.requests.at(-1).messages)[0]), /正文完整保留/)
-  const state = { items: { S1: { handle: 'S1', url, displayMode: 'direct', snippet: 'Preview', evidence: [{ focus: 'old', text: 'OLD EVIDENCE', time: 1 }] } } }
+  const state = { budget: { used: 0 }, items: { S1: { handle: 'S1', url, displayMode: 'direct', snippet: 'Preview', evidence: [{ focus: 'old', text: 'OLD EVIDENCE', time: 1 }] } } }
   assert.match(renderMaterials(state), /Preview/)
   state.items.S1.fetched = { content: '', finalUrl: url, truncated: false, time: 1 }
   assert.doesNotMatch(renderMaterials(state), /Preview|OLD EVIDENCE/)
@@ -306,7 +306,7 @@ test('mixed snapshots switch each material independently and replace prior conte
 
 
 test('empty extracted evidence falls back to a snippet without exposing cached body', () => {
-  const state = { items: { S1: {
+  const state = { budget: { used: 0 }, items: { S1: {
     handle: 'S1', url, displayMode: 'extract', snippet: 'Preview',
     fetched: { content: 'Private cached body', finalUrl: url, truncated: false, time: 0 },
   } } }

@@ -94,7 +94,7 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 ### 快照结构示意
 
-材料快照是提供给主 agent 的文本内容，不是 Web 界面的资料面板。开头说明这是当前资料状态，并标明来源内容属于外部数据，不应当作指令。随后按 handle 排列未隐藏的材料：
+材料快照是提供给主 agent 的文本内容，不是 Web 界面的资料面板。开头展示研究预算、调用尝试次数和剩余额度。材料区说明这是当前资料状态，并标明来源内容属于外部数据，不应当作指令。以下省略预算头，按 handle 展示未隐藏的材料：
 
 - **来源**：handle 和请求 URL，以及可用的标题、发布时间。
 - **已保存正文的信息**：抓取后的最终 URL、截断标记、保存时间（UTC）和字符数；仅在已有正文时出现。
@@ -143,3 +143,20 @@ const material = state?.items.S1
 
 
 实现使用的依赖接口、事件与日志协议、快照管理和测试见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md#materials-注册与阅读链路)。
+
+
+## 共享研究预算
+
+`researchBudget` 默认 `15`，接受非负安全整数；`0` 表示不提供研究工具。可在 profile patch 中覆盖：
+
+```yaml
+- id: banso-materials
+  config:
+    researchBudget: 10
+```
+
+每个 `turn/start` 将用量清零，已有材料继续保留。每条 `web_search` 或 `web_read` 的 `tool/call` 计一次尝试，包括参数错误、失败、取消和被预算拒绝的调用。direct、extract、缓存复用均计一次，内部重试不重复计数，`materials_hide` 不计数。因此尝试次数可以超过额度，获准执行的研究调用不会超过额度。
+
+预算与材料一起进入快照，无材料时也显示总额度、尝试次数和非负剩余额度。额度耗尽后过滤模型请求中的 search/read，并通过 DSH `tools.guard()` 拒绝继续调用；不额外注入收尾指令。默认 loop 先记录调用，再按顺序完成前置检查，最后并发执行，因此 guard 使用已经包含当前调用的 `used <= researchBudget`。本功能仅覆盖默认 loop 的直接工具调用，不支持绕过 loop 的直接 dispatch 或嵌套工具调用计量。
+
+预算复用 materials projection，`stateVersion` 保持 `2`，快照版本不变，不新增日志事件。完整 JSONL 重放根据既有 turn/tool 事件重建计数，包括旧日志中的研究调用。新版本不提供旧持久化 projection 缓存迁移；缺少 budget 字段的缓存不能当作零用量使用，应使用新会话或从完整日志重建。恢复后是否清零取决于是否产生新的 `turn/start`。修改配置不会改写调用历史，工具控制使用当前配置。

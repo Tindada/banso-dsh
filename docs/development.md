@@ -122,7 +122,7 @@ TypeScript 和 esbuild 生成 DSH `__ModuleLoader__.load` 工厂，React 使用�
 | 范围 | 命令 | 主要覆盖 |
 | --- | --- | --- |
 | Banso 组合 | `pnpm --filter banso-dsh test` | 真实插件、默认 loop、JSONL 恢复；handle、并发读取、正文复用、两种阅读模式及参考时间；真实 Jina provider 对接本地 HTTP 服务 |
-| Materials | `pnpm --filter banso-dsh-materials test` | 工具注册与卸载、投影重放、快照替换、隐藏恢复、预算与错误／取消／超时；direct 不调用提取模型 |
+| Materials | `pnpm --filter banso-dsh-materials test` | 共享研究预算（计数、工具过滤、guard、跨 turn 重置、隔离与卸载）、工具注册与卸载、投影重放、快照替换、隐藏恢复、预算与错误／取消／超时；direct 不调用提取模型 |
 | Prompt | `pnpm --filter banso-dsh-prompt test` | 真实 loop、模拟 LLM 与可控时钟；同轮固定、跨轮更新、agent 隔离及重载 |
 | Jina | `pnpm --filter banso-dsh-web-fetch-jina test` | 本地 HTTP 服务验证请求、响应、错误、截断、取消及生命周期 |
 | UI | `pnpm --filter banso-dsh-ui test` | 消息与工具状态投影 |
