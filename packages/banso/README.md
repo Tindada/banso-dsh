@@ -1,8 +1,8 @@
 # Banso 业务 bundle
 
-`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取和 [Banso 提示词插件](https://github.com/Tindada/banso-dsh/blob/main/packages/prompt/README.md)，向 agent 提供 `web_search`、按模式选择的阅读工具、研究规则和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取和 [Banso 提示词插件](https://github.com/Tindada/banso-dsh/blob/main/packages/prompt/README.md)，向 agent 提供 `web_search`、`web_read`、材料隐藏和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
 
-本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。
+本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context；当前通过 `researchPrompt: ""` 关闭研究规则。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。
 
 本包由 Banso 项目独立维护，非 DeepSeek 官方发行包。随包分发的 `base.patch.yml` 改编自 DSH 的 `sdk-minimal` 配置，遵循 MIT；构建和打包时同步生成的 `THIRD_PARTY_NOTICES.md` 保留其完整上游许可声明。
 
@@ -10,12 +10,12 @@
 
 ## 阅读模式
 
-组合将环境变量 `BANSO_WEB_READ_MODE` 传给 materials 的 `readMode`，默认 `extract`：
+统一提供 `web_read`，由模型在每次调用时选择：
 
-- `extract` 注册 `web_read(target, focus)`，快照展示提取证据。
-- `direct` 注册自定义 `web_fetch(target)`，快照展示格式化正文，不调用提取模型。
+- `web_read({target, mode: "extract", focus})` 提取指定证据，focus 必须非空。
+- `web_read({target, mode: "direct"})` 展示格式化正文，不调用提取模型。
 
-每次运行固定模式，切换时创建新 session，恢复时使用相同模式。
+同一会话可逐次切换，自动抓取或复用正文，材料快照按条目展示最近成功阅读的模式。不再支持启动配置 `readMode` 或环境变量 `BANSO_WEB_READ_MODE`；旧 profile 如有该配置应删除。
 
 ## 安装与启动
 

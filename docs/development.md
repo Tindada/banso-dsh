@@ -53,22 +53,23 @@ pnpm exec dsh --profile banso-web --dump-config
 
 | 环节 | 源码入口与依赖接口 | 职责 |
 | --- | --- | --- |
-| 注册 | `index.ts`：`ctx.sessionProjections.register()`、`ctx.tools.register()` | 注册资料和快照投影、隐藏工具，以及由 `readMode` 选择的阅读工具 |
+| 注册 | `index.ts`：`ctx.sessionProjections.register()`、`ctx.tools.register()` | 注册资料和快照投影、隐藏工具，以及统一的 `web_read` 工具 |
 | 搜索包装 | `tools/search.ts` | 保留原生搜索参数和 metadata，将模型回执改为简短输出 |
 | 正文获取 | `tools/page.ts`：`ctx.web.fetch()`、`formatFetchOutput(result, Infinity)` | 解析 handle、复用正文，或调用 provider 并格式化正文；保留 provider 截断 |
 | 证据提取 | `extraction/extract.ts`：`ctx.llm.stream()`、`BlockAssembler` | 单次无工具调用；输入 focus、标题和正文，解析含 `text` 字段的 JSON，保存证据和用量 |
-| 结果提交 | `tools/read.ts`、`tools/fetch.ts`、`tools/hide.ts` | 返回短回执与 metadata，由框架提交工具结果事件 |
+| 结果提交 | `tools/read.ts`、`tools/hide.ts` | 返回短回执与 metadata，由框架提交工具结果事件 |
 | 状态更新 | `state/projection.ts` | 从事件维护 `bansoMaterials`，不从短回执猜测内容 |
 | 上下文注入 | `context/context.ts`、`state/snapshot.ts` | 渲染资料，跟踪并替换旧快照 |
 
-`readMode` 由入口传给工具和渲染层，各模块不自行读取环境变量。提取模型路由使用成对覆盖的 provider/model，否则读取 `session.requestHeader()?.config`；推理固定为 `off`。抓取与提取均传递取消信号。公共配置、资料类型及只读访问方式见 [包 README](../packages/materials/README.md)。
+`web_read` 的必填 `mode` 决定每次阅读方式，材料的 `displayMode` 决定快照展示；不读取全局模式配置。提取模型路由使用成对覆盖的 provider/model，否则读取 `session.requestHeader()?.config`；推理固定为 `off`。抓取与提取均传递取消信号。公共配置、资料类型及只读访问方式见 [包 README](../packages/materials/README.md)。
 
 ### Materials 工具日志协议
 
-search 沿用原生 metadata；read/fetch 的执行结果作为 metadata 保存。正文和证据经投影进入快照，耗时和 token 用量只保存在日志中。
+search 沿用原生 metadata；web_read 的执行结果作为 metadata 保存。正文和证据经投影进入快照，耗时和 token 用量只保存在日志中。
 
-| 字段 | read | fetch | 保存规则 |
+| 字段 | extract | direct | 保存规则 |
 | --- | --- | --- | --- |
+| `mode` | extract | direct | 本次阅读方式 |
 | `requestUrl` | 有 | 有 | 请求地址 |
 | `focus` | 有 | 无 | 本次提取目标 |
 | `content`、`finalUrl`、`truncated` | 可选 | 可选 | 仅本次成功抓取时提供；复用正文时省略 |
@@ -86,15 +87,15 @@ search 沿用原生 metadata；read/fetch 的执行结果作为 metadata 保存�
 
 抓取阶段失败可按请求 URL 创建条目；普通工具错误或整体取消没有有效 metadata 时不更新资料。正文和证据时间取自各自入库的结果事件，复用正文不更新时间或重复记录全文。
 
-资料投影纯同步，不访问网络或时钟，支持 JSONL 重放、后加载和卸载重载。`stateVersion` 保持 `1`，新增 fetch 解析兼容现有 read 日志，不增加迁移或检查点缓存。阅读模式不写入投影，恢复时由调用方保持配置一致。
+资料投影纯同步，不访问网络或时钟，支持 JSONL 重放、后加载和卸载重载。`stateVersion` 为 `2`，通过日志重建材料及逐条 `displayMode`。只解析带 mode 的 web_read 结果，不支持旧阅读日志恢复；升级后使用新会话。成功结果更新展示模式，失败保留原模式；并发阅读以结果事件顺序为准。
 
 ### Materials 快照与提示词
 
-`context/context.ts` 的 `agent/pre-step` 中间件先等待后续检查结果，仅在允许进入 step 时读取投影并注入快照。`renderMaterials(state, readMode)` 负责渲染，展示规则见 [资料展示](../packages/materials/README.md#资料展示)。
+`context/context.ts` 的 `agent/pre-step` 中间件先等待后续检查结果，仅在允许进入 step 时读取投影并注入快照。`renderMaterials(state)` 负责渲染，展示规则见 [资料展示](../packages/materials/README.md#资料展示)。
 
 快照内容不变时复用；变化时用短占位替换旧快照，再追加新快照。消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。全部材料隐藏时生成空快照，从未收集材料时不插入。`bansoMaterialsSnapshot` 保存最新快照的 `{ messageId, seq }` 或 `null`；发现快照被外部覆盖时，下步重新插入。包入口导出对应的 `MaterialsSnapshotState` 类型。卸载停止后续更新，不撤销已写入消息。
 
-`context/guidance.ts` 使用 `ctx.systemPrompt.section()` 注册 `Materials snapshot:` 公共声明和工具指引，通过 `system-prompt/assemble` 中间件置空原生搜索指引；read/hide 的工具指引随作用域可见性生效。search/fetch 不重复添加系统指引；原生 `tool:web_search` 文本置空，快照语义由搜索 description 补充。卸载恢复原生描述与指引，并移除本插件声明。提取模型使用独立提示词，不受这些主 agent 指引影响。
+`context/guidance.ts` 使用 `ctx.systemPrompt.section()` 注册 `Materials snapshot:` 公共声明和工具指引，通过 `system-prompt/assemble` 中间件置空原生搜索指引；read/hide 的工具指引随作用域可见性生效。search 不重复添加系统指引；原生 `tool:web_search` 文本置空，快照语义由搜索 description 补充。卸载恢复原生描述与指引，并移除本插件声明。提取模型使用独立提示词，不受这些主 agent 指引影响。
 
 ### 提示词与参考时间
 

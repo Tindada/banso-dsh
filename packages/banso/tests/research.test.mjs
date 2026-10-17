@@ -29,7 +29,7 @@ class Adapter extends LlmAdapter {
   requests = []
   targets = [url]
   focus = 'facts'
-  readMode = 'extract'
+  mode = 'extract'
   extractions = []
   async resolveModel(provider, model) {
     return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } }
@@ -48,8 +48,8 @@ class Adapter extends LlmAdapter {
     this.requests.push(request)
     const count = this.requests.length
     if (count < 3) {
-      const name = count === 1 ? 'web_search' : this.readMode === 'direct' ? 'web_fetch' : 'web_read'
-      const argumentsList = count === 1 ? [{ queries: ['news'] }] : this.targets.map(target => this.readMode === 'direct' ? { target } : { target, focus: this.focus })
+      const name = count === 1 ? 'web_search' : 'web_read'
+      const argumentsList = count === 1 ? [{ queries: ['news'] }] : this.targets.map(target => ({ target, mode: this.mode, ...(this.mode === 'extract' ? { focus: this.focus } : {}) }))
       for (const [index, args] of argumentsList.entries()) {
         const id = `call-${count}-${index}`, argumentsText = JSON.stringify(args)
         yield { type: 'block-start', index, blockType: 'tool-call' }
@@ -65,7 +65,7 @@ class Adapter extends LlmAdapter {
     }
   }
 }
-async function setup(root, enabled = true, fetchProvider, jinaConfig, readMode = 'extract') {
+async function setup(root, enabled = true, fetchProvider, jinaConfig, mode = 'extract') {
   const ctx = new Context()
   const errors = []
   ctx.on('agent/error', ({ error }) => errors.push(error))
@@ -87,9 +87,9 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig, readMode =
   if (jinaConfig) await ctx.plugin(Jina, jinaConfig)
   await ctx.plugin(WebTools, { fetch: false })
   await ctx.plugin(Timeout)
-  if (enabled) await ctx.plugin(Materials, { readMode })
+  if (enabled) await ctx.plugin(Materials)
   const adapter = new Adapter()
-  adapter.readMode = readMode
+  adapter.mode = mode
   ctx.llm.registerAdapter(['mock'], adapter)
   return { ctx, adapter, errors, fetchCalls }
 }
@@ -236,7 +236,7 @@ test('single handle and URL calls overlap in the default loop and restore new ha
   assert.doesNotMatch(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Search snippet: Preview/)
 
   const other = (await first.ctx.agents.create({ sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
-  const isolated = await first.ctx.tools.execute({ agent: other, name: 'web_read', arguments: { target: 'S1', focus: 'facts' }, callId: 'isolated', signal: new AbortController().signal })
+  const isolated = await first.ctx.tools.execute({ agent: other, name: 'web_read', arguments: { target: 'S1', mode: 'extract', focus: 'facts' }, callId: 'isolated', signal: new AbortController().signal })
   assert.equal(isolated.isError, true)
   assert.match(textOf(isolated), /Unknown material handle/)
   await first.ctx.fiber.dispose(); closed = true
@@ -324,4 +324,35 @@ test('direct mode exposes bodies through snapshots, restores JSONL and reuses pa
   await run(restored, resumed)
   assert.equal(resumed.fetchCalls.length, 0)
   assert.deepEqual(stateOf(resumed.ctx, restored).items.S1.fetched, before.items.S1.fetched)
+})
+
+
+test('one session switches direct and extract both ways without fetching again', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'banso-switch-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const h = await setup(root)
+  t.after(() => h.ctx.fiber.dispose())
+  const { agent } = await h.ctx.agents.create({ sessionId: SessionId('switch'), agentOptions: { provider: 'mock', model: 'mock' } })
+  for (const mode of ['direct', 'extract', 'direct', 'extract']) {
+    h.adapter.mode = mode
+    h.adapter.requests = []
+    h.adapter.targets = ['S1']
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'read' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    assert.deepEqual(h.errors, [])
+    assert.equal(h.fetchCalls.length, 1)
+    assert.equal(stateOf(h.ctx, agent).items.S1.displayMode, mode)
+    const text = textOf(snapshots(h.adapter.requests.at(-1))[0])
+    if (mode === 'direct') {
+      assert.match(text, /FULL BODY ONLY/)
+      assert.doesNotMatch(text, /Evidence\. Focus:/)
+    } else {
+      assert.match(text, /Evidence\. Focus:/)
+      assert.doesNotMatch(text, /FULL BODY ONLY/)
+    }
+  }
+  assert.equal(h.adapter.extractions.length, 2)
+  const results = agent.session.snapshotEvents().filter(e => e.type === 'tool/result' && e.data.meta?.mode)
+  assert.deepEqual(results.map(e => e.data.meta.mode), ['direct', 'extract', 'direct', 'extract'])
+  assert.ok(results.slice(1).every(e => e.data.meta.content === undefined))
 })

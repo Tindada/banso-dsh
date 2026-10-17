@@ -34,7 +34,7 @@ class Adapter extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
-async function harness(t, readMode = 'extract') {
+async function harness(t, mode = 'extract') {
   const ctx = new Context()
   t.after(() => ctx.fiber.dispose())
   const errors = []
@@ -42,22 +42,22 @@ async function harness(t, readMode = 'extract') {
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(Web)
-  const fiber = await ctx.plugin(Materials, { readMode })
+  const fiber = await ctx.plugin(Materials)
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
   const agent = await ctx.agentLoop.create(SessionId('main'), { provider: 'mock', model: 'mock' })
   const run = async (target = agent) => { target.followup(user('research')); await target.whenIdle(); assert.deepEqual(errors, []) }
   let count = 0
   // Supply recorded tool facts directly: context tests do not execute a web tool.
-  const recordRead = (text = '提取证据', requestUrl = url) => {
+  const recordRead = (text = '提取证据', requestUrl = url, selectedMode = mode) => {
     const callId = `fixture-${++count}`
     const call = agent.session.append('tool/call', {
-      name: readMode === 'direct' ? 'web_fetch' : 'web_read', arguments: JSON.stringify({ target: requestUrl, focus: 'facts' }), callId, turn: 0, step: 0,
+      name: 'web_read', arguments: JSON.stringify({ target: requestUrl, focus: 'facts' }), callId, turn: 0, step: 0,
     })
     agent.session.append('tool/result', {
       turn: 0, step: 0,
       message: createToolResultMessage({ callId, content: [{ type: 'text', text: 'Fixture receipt' }], isError: false }),
-      meta: { requestUrl, focus: 'facts', finalUrl: requestUrl + '/final', truncated: true, content: '正文完整保留', evidence: text },
+      meta: { requestUrl, mode: selectedMode, focus: 'facts', finalUrl: requestUrl + '/final', truncated: true, content: '正文完整保留', evidence: text },
     }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   }
   const executeHide = args => ctx.tools.execute({
@@ -275,9 +275,41 @@ test('direct snapshots show one body, suppress evidence, preserve snippets until
   h.recordRead()
   await h.run()
   assert.match(textOf(snapshots(h.adapter.requests.at(-1).messages)[0]), /正文完整保留/)
-  const state = { items: { S1: { handle: 'S1', url, snippet: 'Preview', evidence: [{ focus: 'old', text: 'OLD EVIDENCE', time: 1 }] } } }
-  assert.match(renderMaterials(state, 'direct'), /Preview/)
+  const state = { items: { S1: { handle: 'S1', url, displayMode: 'direct', snippet: 'Preview', evidence: [{ focus: 'old', text: 'OLD EVIDENCE', time: 1 }] } } }
+  assert.match(renderMaterials(state), /Preview/)
   state.items.S1.fetched = { content: '', finalUrl: url, truncated: false, time: 1 }
-  assert.doesNotMatch(renderMaterials(state, 'direct'), /Preview|OLD EVIDENCE/)
-  assert.match(renderMaterials(state, 'direct'), /Page text:/)
+  assert.doesNotMatch(renderMaterials(state), /Preview|OLD EVIDENCE/)
+  assert.match(renderMaterials(state), /Page text:/)
+})
+
+
+test('mixed snapshots switch each material independently and replace prior content', async t => {
+  const h = await harness(t)
+  h.recordRead('First evidence', url, 'extract')
+  h.recordRead('Hidden second evidence', url + '/b', 'direct')
+  await h.run()
+  let text = textOf(snapshots(h.adapter.requests.at(-1).messages)[0])
+  assert.match(text, /First evidence/)
+  assert.equal(text.split('正文完整保留').length - 1, 1)
+  assert.doesNotMatch(text, /Hidden second evidence/)
+  h.recordRead('', url, 'direct')
+  h.recordRead('Second evidence', url + '/b', 'extract')
+  await h.run()
+  const messages = h.adapter.requests.at(-1).messages
+  text = textOf(snapshots(messages)[0])
+  assert.equal(snapshots(messages).length, 1)
+  assert.doesNotMatch(text, /First evidence/)
+  assert.match(text, /Second evidence/)
+  assert.equal(text.split('正文完整保留').length - 1, 1)
+  for (const placeholder of placeholders(messages)) assert.doesNotMatch(textOf(placeholder), /First evidence|正文完整保留/)
+})
+
+
+test('empty extracted evidence falls back to a snippet without exposing cached body', () => {
+  const state = { items: { S1: {
+    handle: 'S1', url, displayMode: 'extract', snippet: 'Preview',
+    fetched: { content: 'Private cached body', finalUrl: url, truncated: false, time: 0 },
+  } } }
+  assert.match(renderMaterials(state), /Search snippet: Preview/)
+  assert.doesNotMatch(renderMaterials(state), /Private cached body|Page text:/)
 })

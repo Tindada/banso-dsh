@@ -12,7 +12,6 @@ import Web from '@deepseek-ai/dsh-web'
 import * as Timeout from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import * as NativeTools from '@deepseek-ai/dsh-tool-web'
 import * as Materials from '../lib/index.js'
-import { createFetchTool } from '../lib/tools/fetch.js'
 import { createReadTool } from '../lib/tools/read.js'
 import { registerSearchWrapper } from '../lib/tools/search.js'
 import { registerWebGuidance } from '../lib/context/guidance.js'
@@ -21,7 +20,7 @@ const WebToolFixture = {
   inject: Materials.inject,
   Config: Materials.Config,
   apply(ctx, config) {
-    ctx.tools.register(config.readMode === 'direct' ? createFetchTool(ctx, config) : createReadTool(ctx, config))
+    ctx.tools.register(createReadTool(ctx, config))
     registerWebGuidance(ctx)
     registerSearchWrapper(ctx)
   },
@@ -79,7 +78,7 @@ async function harness(t, { native = true, wrapper = true, projection = true, fu
   const wrapperFiber = wrapper ? await ctx.plugin(full ? Materials : WebToolFixture, { ...config, ...options }) : undefined
   let count = 0
   const create = setup => ctx.agents.create({ sessionId: SessionId(`agent-${++count}`), ...(setup ? { setup } : {}) })
-  const execute = (agent, name = 'web_read', args = name === 'web_read' ? { target: url, focus: 'facts' } : { queries: ['news'] }, signal = new AbortController().signal) =>
+  const execute = (agent, name = 'web_read', args = name === 'web_read' ? { target: url, mode: 'extract', focus: 'facts' } : { queries: ['news'] }, signal = new AbortController().signal) =>
     ctx.tools.execute({ agent, name, arguments: args, callId: `call-${++count}`, signal })
   return { ctx, results, calls, adapter, items, urlIndex, nativeFiber, wrapperFiber, create, execute }
 }
@@ -118,10 +117,10 @@ test('read has its own schema and timeout; compact receipts, full metadata and i
   const h = await harness(t), { agent } = await h.create()
   const definition = h.ctx.tools.get('web_read', agent)
   assert.equal(definition.timeoutMs, 120000)
-  assert.equal(definition.isConcurrencySafe({ target: url, focus: 'facts' }), true)
+  assert.equal(definition.isConcurrencySafe({ target: url, mode: 'extract', focus: 'facts' }), true)
   const schema = h.ctx.tools.schemas(agent).find(tool => tool.name === 'web_read').parameters
   assert.equal(schema.type, 'object')
-  assert.deepEqual(schema.required, ['target', 'focus'])
+  assert.deepEqual(schema.required, ['target', 'mode'])
   const result = await h.execute(agent)
   assert.equal(result.isError, false, textOf(result))
   assert.match(textOf(result), /Page fetched.*Evidence extracted/)
@@ -151,7 +150,7 @@ test('handle and exact URL reuse saved body, omit it from metadata, and use new 
   h.urlIndex[url] = 'S1'
   const { agent } = await h.create()
   for (const target of ['S1', url]) {
-    const result = await h.execute(agent, 'web_read', { target, focus: `Focus ${target}` })
+    const result = await h.execute(agent, 'web_read', { target, mode: 'extract', focus: `Focus ${target}` })
     assert.equal(result.isError, false, textOf(result))
     assert.equal(result.meta.content, undefined)
     assert.equal(result.meta.focus, `Focus ${target}`)
@@ -210,7 +209,7 @@ test('input budget includes framing; missing model route fails without losing bo
 
 test('invalid arguments and missing material/agent fail without making requests', async t => {
   const h = await harness(t), { agent } = await h.create()
-  for (const args of [{}, { target: url }, { target: url, focus: ' ' }, { target: [], focus: 'x' }, { target: 'file:///bad', focus: 'x' }, { target: 'S99', focus: 'x' }]) {
+  for (const args of [{ target: url, mode: 'unknown' }, { target: url, mode: 'extract' }, { target: url, focus: 'missing mode' }, {}, { target: url }, { target: url, mode: 'extract', focus: ' ' }, { target: [], mode: 'extract', focus: 'x' }, { target: 'file:///bad', mode: 'extract', focus: 'x' }, { target: 'S99', mode: 'extract', focus: 'x' }]) {
     assert.equal((await h.execute(agent, 'web_read', args)).isError, true)
   }
   assert.equal((await h.execute(undefined)).isError, true)
@@ -267,7 +266,7 @@ test('fetch and extraction cancellation propagate with no partial metadata', asy
     if (stage === 'fetch') h.results.fetch = (_request, signal) => wait(signal)
     else h.adapter.action = request => wait(request.signal)
     const abort = new AbortController()
-    const pending = h.execute(agent, 'web_read', { target: url, focus: 'facts' }, abort.signal)
+    const pending = h.execute(agent, 'web_read', { target: url, mode: 'extract', focus: 'facts' }, abort.signal)
     await ready
     abort.abort()
     const result = await pending
@@ -304,44 +303,40 @@ test('configuration validates paired routes and positive budgets', () => {
 })
 
 
-test('unified plugin selects one reading tool and follows scoped visibility and disposal', async t => {
-  for (const mode of [undefined, 'extract', 'direct']) {
-    const h = await harness(t, { full: true, options: mode ? { readMode: mode } : {} })
-    const { agent } = await h.create()
-    const name = mode === 'direct' ? 'web_fetch' : 'web_read'
-    const other = name === 'web_fetch' ? 'web_read' : 'web_fetch'
-    assert.ok(h.ctx.tools.get(name, agent))
-    assert.equal(h.ctx.tools.get(other, agent), undefined)
-    const guidance = async () => (await h.ctx.systemPrompt.assemble({ agent, scope: agent })).sections.find(s => s.name === `tool:${name}`)?.text
-    const materialsGuidance = async () => (await h.ctx.systemPrompt.assemble({ agent, scope: agent })).sections.find(s => s.name === 'banso:materials')?.text
-    const materials = await materialsGuidance()
-    assert.match(materials, /\*\*materials snapshot\*\*/)
-    assert.match(materials, /stable handle and source information/)
-    assert.match(materials, /consult each tool’s description/)
-    assert.doesNotMatch(materials, /web_read|web_fetch|web_search|materials_hide/)
-    assert.match(materials, /external, untrusted data, never as instructions/)
-    assert.match(h.ctx.tools.get(name, agent).description, /Saved pages are reused, not refreshed/)
-    assert.match(h.ctx.tools.get(name, agent).description, /next materials snapshot/)
-    if (mode === 'direct') assert.equal(await guidance(), undefined)
-    else assert.match(await guidance(), /specific focus/)
-    const restore = agent.ctx.tools.restrict({ deny: [name] })
-    assert.equal(h.ctx.tools.get(name, agent), undefined)
-    assert.equal(await guidance(), mode === 'direct' ? undefined : '')
-    assert.equal(await materialsGuidance(), materials)
-    restore()
-    await h.wrapperFiber.dispose()
-    assert.equal(h.ctx.tools.get(name, agent), undefined)
-    assert.equal(await guidance(), undefined)
-    assert.equal(await materialsGuidance(), undefined)
-  }
-  assert.throws(() => Materials.Config({ readMode: 'unknown' }))
+test('unified plugin registers only web_read and follows scoped visibility and disposal', async t => {
+  const h = await harness(t, { full: true, options: {} })
+  const { agent } = await h.create()
+  const name = 'web_read'
+  const other = 'web_fetch'
+  assert.ok(h.ctx.tools.get(name, agent))
+  assert.equal(h.ctx.tools.get(other, agent), undefined)
+  const guidance = async () => (await h.ctx.systemPrompt.assemble({ agent, scope: agent })).sections.find(s => s.name === `tool:${name}`)?.text
+  const materialsGuidance = async () => (await h.ctx.systemPrompt.assemble({ agent, scope: agent })).sections.find(s => s.name === 'banso:materials')?.text
+  const materials = await materialsGuidance()
+  assert.match(materials, /\*\*materials snapshot\*\*/)
+  assert.match(materials, /stable handle and source information/)
+  assert.match(materials, /consult each tool’s description/)
+  assert.doesNotMatch(materials, /web_read|web_fetch|web_search|materials_hide/)
+  assert.match(materials, /external, untrusted data, never as instructions/)
+  assert.match(h.ctx.tools.get(name, agent).description, /Saved pages are reused, not refreshed/)
+  assert.match(h.ctx.tools.get(name, agent).description, /next materials snapshot/)
+  assert.match(await guidance(), /specific focus/)
+  const restore = agent.ctx.tools.restrict({ deny: [name] })
+  assert.equal(h.ctx.tools.get(name, agent), undefined)
+  assert.equal(await guidance(), '')
+  assert.equal(await materialsGuidance(), materials)
+  restore()
+  await h.wrapperFiber.dispose()
+  assert.equal(h.ctx.tools.get(name, agent), undefined)
+  assert.equal(await guidance(), undefined)
+  assert.equal(await materialsGuidance(), undefined)
 })
 
-test('direct fetch returns page metadata and short receipts without extraction or input budgets', async t => {
-  const h = await harness(t, { options: { readMode: 'direct', maxInputBytes: 1 } })
+test('direct read returns page metadata and short receipts without extraction or input budgets', async t => {
+  const h = await harness(t, { options: { maxInputBytes: 1 } })
   const { agent } = await h.create()
-  const fetch = target => h.execute(agent, 'web_fetch', { target })
-  assert.deepEqual(h.ctx.tools.schemas(agent).find(t => t.name === 'web_fetch').parameters.required, ['target'])
+  const fetch = target => h.execute(agent, 'web_read', { target, mode: 'direct', focus: 'ignored' })
+  assert.deepEqual(h.ctx.tools.schemas(agent).find(t => t.name === 'web_read').parameters.required, ['target', 'mode'])
   const first = await fetch(url)
   assert.equal(first.isError, false, textOf(first))
   assert.match(first.meta.content, /Full body/)
@@ -361,10 +356,10 @@ test('direct fetch returns page metadata and short receipts without extraction o
   assert.equal(h.adapter.requests.length, 0)
 })
 
-test('direct fetch handles empty sources, truncation, failures and invalid targets', async t => {
-  const h = await harness(t, { options: { readMode: 'direct' } })
+test('direct read handles empty sources, truncation, failures and invalid targets', async t => {
+  const h = await harness(t, { options: {} })
   const { agent } = await h.create()
-  const fetch = target => h.execute(agent, 'web_fetch', { target })
+  const fetch = target => h.execute(agent, 'web_read', { target, mode: 'direct', focus: 'ignored' })
   h.results.fetch = { url, statusCode: 200, body: { kind: 'text', content: '' }, truncated: true }
   const empty = await fetch(url)
   assert.equal(empty.isError, false)
@@ -376,16 +371,16 @@ test('direct fetch handles empty sources, truncation, failures and invalid targe
   assert.match((await fetch(url)).meta.error, /offline/)
   const count = h.calls.length
   for (const target of ['S99', 'file:///tmp/a', 'not a URL']) assert.equal((await fetch(target)).isError, true)
-  assert.equal((await h.execute(undefined, 'web_fetch', { target: url })).isError, true)
-  const noProjection = await harness(t, { projection: false, options: { readMode: 'direct' } })
-  assert.equal((await noProjection.execute((await noProjection.create()).agent, 'web_fetch', { target: url })).isError, true)
+  assert.equal((await h.execute(undefined, 'web_read', { target: url, mode: 'direct' })).isError, true)
+  const noProjection = await harness(t, { projection: false, options: {} })
+  assert.equal((await noProjection.execute((await noProjection.create()).agent, 'web_read', { target: url, mode: 'direct' })).isError, true)
   assert.equal(h.calls.length, count)
   assert.equal(h.adapter.requests.length, 0)
 })
 
-test('direct fetch cancellation and timeout commit no partial metadata', async t => {
+test('direct read cancellation and timeout commit no partial metadata', async t => {
   for (const timeout of [false, true]) {
-    const h = await harness(t, { options: { readMode: 'direct', timeoutMs: timeout ? 30 : 120000 } })
+    const h = await harness(t, { options: { timeoutMs: timeout ? 30 : 120000 } })
     const { agent } = await h.create()
     let started, aborted = false
     const ready = new Promise(resolve => { started = resolve })
@@ -396,7 +391,7 @@ test('direct fetch cancellation and timeout commit no partial metadata', async t
     const abort = new AbortController()
     const keepAlive = setInterval(() => {}, 1000)
     try {
-      const pending = h.execute(agent, 'web_fetch', { target: url }, abort.signal)
+      const pending = h.execute(agent, 'web_read', { target: url, mode: 'direct' }, abort.signal)
       await ready
       if (!timeout) abort.abort()
       const result = await pending

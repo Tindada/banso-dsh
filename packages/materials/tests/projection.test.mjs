@@ -15,7 +15,7 @@ function fixture() {
     return full
   }
   const call = (name = 'web_search', args = { queries: ['q'] }, turn = 1) => emit({ type: 'tool/call', data: { name, arguments: JSON.stringify(args), callId: `c${seq}`, turn, step: 1 } })
-  const read = (target = A, focus = 'facts') => call('web_read', { target, focus })
+  const read = (target = A, focus = 'facts') => call('web_read', { target, mode: 'extract', focus })
   const result = (call, meta, options = {}) => emit({ type: 'tool/result', surfaceOp: 'append', sourceEventSeqs: [call.seq], data: {
     turn: call.data.turn, step: 1,
     message: { role: 'tool', toolCallId: call.data.callId, content: [{ type: 'text', text: 'Short receipt, never evidence' }], isError: options.isError ?? false },
@@ -25,8 +25,8 @@ function fixture() {
 }
 const search = sources => ({ sources, truncated: false })
 const page = { finalUrl: B, truncated: true, content: 'Full body' }
-const success = (requestUrl = A, focus = 'facts') => ({ requestUrl, focus, ...page, evidence: 'Evidence' })
-const reused = (focus = 'facts') => ({ requestUrl: A, focus, evidence: 'Evidence' })
+const success = (requestUrl = A, focus = 'facts') => ({ requestUrl, mode: 'extract', focus, ...page, evidence: 'Evidence' })
+const reused = (focus = 'facts') => ({ requestUrl: A, mode: 'extract', focus, evidence: 'Evidence' })
 
 test('hide commits only visibility changes and rejects malformed metadata atomically', () => {
   const f = fixture()
@@ -50,8 +50,8 @@ test('search and normal read outcomes restore hidden materials, but tool errors 
   const cases = [
     { label: 'same URL search', name: 'web_search', meta: search([{ url: A, title: 'Updated' }]) },
     { label: 'saved page read', name: 'web_read', meta: reused('new focus') },
-    { label: 'fetch failure', name: 'web_read', meta: { requestUrl: A, focus: 'facts', error: 'Fetch failed: HTTP 503' } },
-    { label: 'extraction failure', name: 'web_read', meta: { requestUrl: A, focus: 'facts', error: 'Extraction failed: invalid JSON' } },
+    { label: 'fetch failure', name: 'web_read', meta: { requestUrl: A, mode: 'extract', focus: 'facts', error: 'Fetch failed: HTTP 503' } },
+    { label: 'extraction failure', name: 'web_read', meta: { requestUrl: A, mode: 'extract', focus: 'facts', error: 'Extraction failed: invalid JSON' } },
     { label: 'tool error', name: 'web_read', meta: undefined, isError: true },
   ]
   for (const { label, name, meta, isError = false } of cases) {
@@ -59,7 +59,7 @@ test('search and normal read outcomes restore hidden materials, but tool errors 
     f.result(f.read(), success())
     f.result(f.call('materials_hide', { handles: ['S1'] }), { hidden: ['S1'], alreadyHidden: [], unknown: [] })
     const saved = structuredClone(f.state)
-    f.result(f.call(name, name === 'web_read' ? { target: 'S1', focus: 'facts' } : { queries: ['q'] }), meta, { isError })
+    f.result(f.call(name, name === 'web_read' ? { target: 'S1', mode: 'extract', focus: 'facts' } : { queries: ['q'] }), meta, { isError })
     assert.equal(f.state.items.S1.hidden, isError, label)
     assert.deepEqual(f.state.urlIndex, saved.urlIndex, label)
     assert.equal(f.state.nextHandle, saved.nextHandle, label)
@@ -104,13 +104,13 @@ test('new URL saves redirected body; reuse appends focus groups without changing
 
 test('extraction failure and empty results preserve body and previous evidence', () => {
   const f = fixture()
-  f.result(f.read(), { requestUrl: A, focus: 'facts', ...page, error: 'Extraction failed: invalid JSON' })
+  f.result(f.read(), { requestUrl: A, mode: 'extract', focus: 'facts', ...page, error: 'Extraction failed: invalid JSON' })
   assert.equal(f.state.items.S1.fetched.content, 'Full body')
   assert.equal(f.state.items.S1.evidence, undefined)
   f.result(f.read('S1'), reused())
   const saved = structuredClone(f.state.items.S1)
   for (const outcome of [{ evidence: '' }, { error: 'Extraction failed: no route' }]) {
-    f.result(f.read(), { requestUrl: A, focus: 'facts', ...outcome })
+    f.result(f.read(), { requestUrl: A, mode: 'extract', focus: 'facts', ...outcome })
     assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
     assert.deepEqual(f.state.items.S1.fetched, saved.fetched)
   }
@@ -118,7 +118,7 @@ test('extraction failure and empty results preserve body and previous evidence',
 
 test('fetch failures create URL entries and retain existing successful body; ordinary errors do not import', () => {
   const f = fixture()
-  const failed = { requestUrl: A, focus: 'facts', error: 'Fetch failed: HTTP 503' }
+  const failed = { requestUrl: A, mode: 'extract', focus: 'facts', error: 'Fetch failed: HTTP 503' }
   f.result(f.read(), failed)
   assert.equal(f.state.items.S1.fetched, undefined)
   f.result(f.read(), success())
@@ -153,7 +153,7 @@ test('ignores malformed metadata, surface replacement and unrelated tools', () =
   const f = fixture(), empty = f.state
   f.call('another_tool')
   assert.equal(f.state, empty)
-  for (const meta of [undefined, { ...success(), content: 42 }, { requestUrl: A, focus: 'facts', content: 'Incomplete page' }]) {
+  for (const meta of [undefined, { ...success(), content: 42 }, { requestUrl: A, mode: 'extract', focus: 'facts', content: 'Incomplete page' }]) {
     f.result(f.read(), meta)
     assert.deepEqual(f.state.items, {})
   }
@@ -174,27 +174,58 @@ test('separate initial states do not share handles or evidence', () => {
 })
 
 
-test('fetch results correlate out of order, save and reuse bodies, restore visibility and replay', () => {
+test('direct read results correlate out of order, save and reuse bodies, restore visibility and replay', () => {
   const f = fixture()
-  const a = f.call('web_fetch', { target: A }), b = f.call('web_fetch', { target: B })
-  f.result(b, { requestUrl: B, ...page })
-  f.result(a, { requestUrl: A, content: '', finalUrl: A, truncated: false, evidence: 'must not import', focus: 'ignored' })
+  const a = f.call('web_read', { mode: 'direct', target: A }), b = f.call('web_read', { mode: 'direct', target: B })
+  f.result(b, { mode: 'direct', requestUrl: B, ...page })
+  f.result(a, { mode: 'direct', requestUrl: A, content: '', finalUrl: A, truncated: false, evidence: 'must not import', focus: 'ignored' })
   assert.equal(f.state.items.S1.url, B)
   assert.equal(f.state.items.S2.fetched.content, '')
   assert.equal(f.state.items.S2.evidence, undefined)
   const saved = structuredClone(f.state.items.S2.fetched)
   f.result(f.call('materials_hide'), { hidden: ['S2'], alreadyHidden: [], unknown: [] })
-  f.result(f.call('web_fetch', { target: 'S2' }), { requestUrl: A })
+  f.result(f.call('web_read', { mode: 'direct', target: 'S2' }), { mode: 'direct', requestUrl: A })
   assert.equal(f.state.items.S2.hidden, false)
   assert.deepEqual(f.state.items.S2.fetched, saved)
   assert.equal(f.state.nextHandle, 3)
-  f.result(f.call('web_fetch'), { requestUrl: A, error: 'Fetch failed' })
+  f.result(f.call('web_read', { target: A, mode: 'direct' }), { mode: 'direct', requestUrl: A, error: 'Fetch failed' })
   assert.deepEqual(f.state.items.S2.fetched, saved)
   const before = structuredClone(f.state.items)
-  f.result(f.call('web_fetch'), { requestUrl: A, content: 'missing finalUrl' })
-  f.result(f.call('web_fetch'), undefined, { isError: true })
+  f.result(f.call('web_read', { target: A, mode: 'direct' }), { mode: 'direct', requestUrl: A, content: 'missing finalUrl' })
+  f.result(f.call('web_read', { target: A, mode: 'direct' }), undefined, { isError: true })
   assert.deepEqual(f.state.items, before)
   assert.deepEqual(f.state.pendingCalls, {})
   const replayed = f.events.reduce(applyMaterials, materialsProjection.init())
   assert.deepEqual(replayed, f.state)
+})
+
+
+test('per-read modes switch in result order, preserve caches, and failed reads do not switch', () => {
+  const f = fixture()
+  f.result(f.read(), { ...success(), mode: 'extract' })
+  const saved = structuredClone(f.state.items.S1)
+  const extract = f.read(), direct = f.read()
+  f.result(direct, { requestUrl: A, mode: 'direct' })
+  assert.equal(f.state.items.S1.displayMode, 'direct')
+  assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
+  f.result(f.read(), { requestUrl: A, mode: 'extract', focus: 'facts', error: 'Extraction failed' })
+  assert.equal(f.state.items.S1.displayMode, 'direct')
+  f.result(f.read(), undefined, { isError: true })
+  assert.equal(f.state.items.S1.displayMode, 'direct')
+  f.result(extract, { requestUrl: A, mode: 'extract', focus: 'facts', evidence: '' })
+  assert.equal(f.state.items.S1.displayMode, 'extract')
+  assert.deepEqual(f.state.items.S1.fetched, saved.fetched)
+  assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
+  f.result(f.read(), { requestUrl: A, mode: 'invalid', focus: 'facts', evidence: 'Invalid' })
+  assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
+  assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
+})
+
+test('obsolete fetch and read results without mode are ignored', () => {
+  const f = fixture()
+  f.result(f.call('web_fetch'), { requestUrl: A, ...page })
+  const { mode, ...oldRead } = success()
+  f.result(f.read(), oldRead)
+  assert.deepEqual(f.state.items, {})
+  assert.deepEqual(f.state.pendingCalls, {})
 })

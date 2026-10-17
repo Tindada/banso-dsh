@@ -33,9 +33,10 @@ const fetchMetaSchema = z.object({
 })
 
 const readMetaSchema = fetchMetaSchema.extend({
-  focus: z.string().refine(value => value.trim().length > 0),
+  mode: z.enum(['direct', 'extract']),
+  focus: z.string().optional(),
   evidence: z.string().optional(),
-})
+}).refine(value => value.mode === 'direct' || (value.focus !== undefined && value.focus.trim().length > 0))
 
 const fetchedSchema = z.object({
   content: z.string(),
@@ -58,6 +59,7 @@ const evidenceSchema = z.object({
 
 const materialSchema = sourceSchema.extend({
   handle: z.string(),
+  displayMode: z.enum(['direct', 'extract']).optional(),
   hidden: z.boolean().optional(),
   fetched: fetchedSchema.optional(),
   evidence: z.array(evidenceSchema).optional(),
@@ -70,7 +72,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
   pendingCalls: z.record(
     z.string(),
     z.object({
-      name: z.enum(['web_search', 'web_read', 'web_fetch', 'materials_hide']),
+      name: z.enum(['web_search', 'web_read', 'materials_hide']),
       callId: z.string(),
       turn: z.number().int(),
     }),
@@ -79,7 +81,7 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
 
 function trackCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
   const { name, callId, turn } = event.data
-  if (name !== 'web_search' && name !== 'web_read' && name !== 'web_fetch' && name !== 'materials_hide') return undefined
+  if (name !== 'web_search' && name !== 'web_read' && name !== 'materials_hide') return undefined
 
   return { name, callId, turn }
 }
@@ -141,15 +143,13 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     return next
   }
 
-  if (call.name === 'web_read' || call.name === 'web_fetch') {
+  if (call.name === 'web_read') {
     // Ordinary tool errors include invalid input and cancellation; no stage facts were committed.
     if (event.data.message.isError) return next
-    const parsed = fetchMetaSchema.safeParse(event.data.meta)
-    const read = call.name === 'web_read' ? readMetaSchema.safeParse(event.data.meta) : undefined
-    if (read !== undefined && !read.success) return next
+    const parsed = readMetaSchema.safeParse(event.data.meta)
     if (!parsed.success) return next
-    const { requestUrl, content, finalUrl, truncated } = parsed.data
-    const evidenceGroup = read?.success ? read.data : undefined
+    const { requestUrl, content, finalUrl, truncated, mode } = parsed.data
+    const evidenceGroup = mode === 'extract' ? parsed.data : undefined
     if (content !== undefined && (finalUrl === undefined || truncated === undefined)) return next
     upsert(next, requestUrl, item => {
       const visible = { ...item, hidden: false }
@@ -159,12 +159,16 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
             fetched: { content, finalUrl: finalUrl!, truncated: truncated!, time: event.time },
           }
         : visible
-      if (!evidenceGroup?.evidence?.trim()) return updated
+      if (parsed.data.error !== undefined) return updated
+      // A reused page must already exist; empty evidence is still a successful read.
+      const succeeded = mode === 'direct' ? updated.fetched !== undefined : evidenceGroup?.evidence !== undefined
+      const displayed = succeeded ? { ...updated, displayMode: mode } : updated
+      if (!evidenceGroup?.evidence?.trim()) return displayed
       return {
-        ...updated,
+        ...displayed,
         evidence: [
           ...item.evidence ?? [],
-          { focus: evidenceGroup.focus, text: evidenceGroup.evidence, time: event.time },
+          { focus: evidenceGroup.focus!, text: evidenceGroup.evidence, time: event.time },
         ],
       }
     })
@@ -184,7 +188,7 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
 // Derived index over existing tool facts, not a new whole-state event domain.
 export const materialsProjection: ProjectionDefinition<'bansoMaterials'> = {
   key: 'bansoMaterials',
-  stateVersion: 1,
+  stateVersion: 2,
   stateSchema,
   init: () => ({ items: {}, urlIndex: {}, nextHandle: 1, pendingCalls: {} }),
   apply: applyMaterials,

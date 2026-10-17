@@ -6,17 +6,16 @@
 
 需要 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务，以及可用的搜索和抓取 provider。组合时保留原生 `web_search`，关闭原生 `web_fetch`，避免与本插件的阅读工具重复；Banso bundle 已完成这些配置。
 
-在 Banso profile 中，插件配置放在 `banso-materials` 注册项的 `config` 下。通过 Banso 选择阅读模式的入口见 [入口包阅读模式](https://github.com/Tindada/banso-dsh/blob/main/packages/banso/README.md#阅读模式)。
+在 Banso profile 中，插件配置放在 `banso-materials` 注册项的 `config` 下。阅读方式由每次工具调用的 `mode` 决定。
 
 ## 配置
 
 | 字段 | 默认值 | 用途 |
 | --- | --- | --- |
-| `readMode` | `extract` | `extract` 或 `direct`，控制工具注册与快照展示 |
 | `provider`、`model` | 当前 session 最新请求的模型路由 | 必须成对覆盖；没有路由时提取失败 |
 | `maxInputBytes` | 200,000 | 提取系统提示词与序列化输入的 UTF-8 字节上限，超限报错而不截取 |
 | `maxOutputTokens` | 4,096 | 提取输出上限；达到上限不保存残缺证据 |
-| `timeoutMs` | 120,000 | read／fetch 整体超时，单位毫秒 |
+| `timeoutMs` | 120,000 | web_read 整体超时，单位毫秒 |
 
 `provider`、`model`、`maxInputBytes` 和 `maxOutputTokens` 仅用于提取；直接模式仍保留配置合法性校验，但不调用提取器。direct 不额外裁剪正文，保留 provider 截断；超过主模型上下文上限时作为运行失败处理。
 
@@ -27,14 +26,14 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 ## 阅读模式
 
-直接加载本插件时设置 `config.readMode`，默认 `extract`；非法模式启动报错。两种模式都支持搜索和材料隐藏，每次只提供一种阅读工具。
+只提供 `web_read`，每次调用必须选择 `mode`，没有默认值或启动模式配置：
 
 | 模式 | 阅读工具 | 主 agent 看到的内容 |
 | --- | --- | --- |
-| `extract` | `web_read(target, focus)` | 按 focus 提取的证据 |
-| `direct` | `web_fetch(target)` | 已保存的格式化正文 |
+| `extract` | `web_read({target, mode: "extract", focus})` | 按 focus 提取的证据 |
+| `direct` | `web_read({target, mode: "direct"})` | 已保存的格式化正文 |
 
-同一 session 不支持中途切换模式。切换模式时创建新 session，恢复会话时继续使用原模式。
+同一 session 可逐次切换；两种方式共用正文缓存，不需要单独调用 fetch。direct 仍通过当前 fetch provider 获取正文，不意味着切换到 HTTP provider。
 
 ## 工具行为
 
@@ -47,7 +46,7 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 `web_read` 接受以下参数：
 
 ```json
-{"target": "S1", "focus": "项目的开源范围和许可证"}
+{"target": "S1", "mode": "extract", "focus": "项目的开源范围和许可证"}
 ```
 
 `target` 为资料 handle 或完整 HTTP(S) URL，`focus` 为非空的提取目标。每次读取一个页面，多页使用多个调用。
@@ -58,10 +57,10 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 ### 直接读取正文
 
-`web_fetch` 接受以下参数，不需要 focus：
+`web_read` 的 direct 模式接受以下参数，不需要 focus（传入时忽略）：
 
 ```json
-{"target": "S1"}
+{"target": "S1", "mode": "direct"}
 ```
 
 `target` 同样支持完整 HTTP(S) URL。首次成功抓取后保存正文，后续调用复用已有正文，不刷新网页，也不调用提取模型。
@@ -84,10 +83,12 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 ## 资料展示
 
-快照只展示未隐藏的资料，并保留来源和正文截断提示：
+快照只展示未隐藏的资料，并保留来源和正文截断提示。每条材料以最近一次成功阅读的模式展示，同一快照可混合两种模式：
 
 - `extract` 模式：有证据时展示证据；尚无证据时展示搜索 snippet。提取失败不自动退回全文展示。
 - `direct` 模式：有正文时展示正文，不展示提取证据；尚无正文时展示搜索 snippet。空正文也视为已保存。
+
+失败或取消不切换展示模式；成功提取但无相关证据仍切换为 extract。正文和累计证据均保留，切换只改变展示；同一材料并发阅读以成功结果写入日志的顺序为准。尚未成功阅读时展示搜索 snippet（如有）。
 
 搜索 snippet 仍保存在资料中，显示证据或正文时只是暂不展示。资料变化会在后续模型步骤中反映到快照。
 
@@ -119,7 +120,7 @@ Evidence:
 
 抓取失败时不进行证据提取；抓取成功但提取失败时仍保留正文和旧证据。未知 handle、非法参数或缺少所需服务时返回工具错误。整体取消或超时不保证保存本次尚未完成的正文和证据。
 
-资料跨 turn 保存，并支持会话恢复；handle 仅在所属 session 内有效。卸载插件不会撤销已经写入的会话内容。
+只支持当前工具协议的会话恢复，不兼容旧 `web_fetch` 或无 mode 的 `web_read` 日志；升级后使用新会话。资料跨 turn 保存，并支持会话恢复；handle 仅在所属 session 内有效。卸载插件不会撤销已经写入的会话内容。
 
 不提供网页刷新或过期策略、证据去重与合并、长文分块、上下文总量控制、长期资料库或最终引用语义校验。无法恢复 provider 已截断的内容；证据和历史日志会继续增长。
 
@@ -135,6 +136,7 @@ const material = state?.items.S1
 - `items` 按 handle 保存资料，`urlIndex` 按精确请求 URL 索引；首次有效发现按日志顺序分配 `S1`、`S2`。重定向的最终 URL 不合并其他条目。
 - `hidden` 缺省或为 `false` 时可见，为 `true` 时隐藏整个条目。再次搜索命中同一精确请求 URL 或收到有效阅读结果时设为 `false`；正文、证据及 handle 均保留。
 - 资料保留标题、snippet、发布时间等搜索字段。搜索仅覆盖本次提供的字段，不清除正文或证据。
+- `displayMode` 为最近成功阅读的 `direct` 或 `extract`；尚未成功阅读时缺省。
 - `fetched` 保存最后成功的格式化正文、最终 URL、截断标记及正文入库时间。失败保留此前正文。
 - `evidence` 为追加的证据组，每组保存 `focus`、`text` 和提取结果入库时间 `time`。失败和空结果不清除已有证据。
 - 正文复用不更改入库时间，也不重复记录全文。正文和证据的时间表示保存时间，单位为 Unix 毫秒。

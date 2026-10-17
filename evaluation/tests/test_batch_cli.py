@@ -164,50 +164,29 @@ def test_missing_fixed_runtime_configuration(cli, tmp_path, capsys, missing):
     assert (".env.example" if missing == "file" else missing) in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("mode", [None, "extract", "direct", " direct "])
-def test_read_mode_config_and_resume(cli, tmp_path, monkeypatch, capsys, mode):
+@pytest.mark.parametrize("mode", [None, "extract", "direct", "invalid", ""])
+def test_legacy_read_mode_is_not_forwarded(cli, tmp_path, monkeypatch, capsys, mode):
     args, _, options = cli
-    monkeypatch.setenv("BANSO_WEB_READ_MODE", "invalid-from-process")
+    monkeypatch.setenv("BANSO_WEB_READ_MODE", "direct")
     if mode is not None:
         env = tmp_path / ".env"
         env.write_text(env.read_text() + f'BANSO_WEB_READ_MODE="{mode}"\n')
     assert batch.main(args) == 0
-    expected = mode.strip() if mode is not None else None
-    if mode is None:
-        assert "BANSO_WEB_READ_MODE" not in options["env"]
-    else:
-        assert options["env"]["BANSO_WEB_READ_MODE"] == expected
-    assert "read_mode" not in options
-    assert "read_mode_override" not in options  # Metadata is not an SDK option.
+    assert "BANSO_WEB_READ_MODE" not in options["env"]
     manifest = json.loads((tmp_path / "runs" / "manifest.json").read_text())
-    assert manifest["runtime"]["read_mode_override"] == expected
+    assert "read_mode_override" not in manifest["runtime"]
     assert batch.main(args + ["--resume"]) == 0
     capsys.readouterr()
 
 
-@pytest.mark.parametrize("mode", ["", "auto", "DIRECT"])
-def test_invalid_read_mode_before_sdk(cli, tmp_path, capsys, mode):
-    args, _, options = cli
-    env = tmp_path / ".env"
-    env.write_text(env.read_text() + f'BANSO_WEB_READ_MODE="{mode}"\n')
-    assert batch.main(args) == 2
-    assert options == {}
-    assert not (tmp_path / "runs").exists()
-    assert "BANSO_WEB_READ_MODE" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("change", ["mode", "legacy_manifest"])
-def test_read_mode_resume_rejects_changes_without_rewriting_results(cli, tmp_path, capsys, change):
+@pytest.mark.parametrize("legacy_mode", [None, "extract", "direct"])
+def test_legacy_manifest_cannot_resume_without_rewriting_results(cli, tmp_path, capsys, legacy_mode):
     args, _, options = cli
     assert batch.main(args) == 0
     manifest_path = tmp_path / "runs" / "manifest.json"
-    if change == "mode":
-        env = tmp_path / ".env"
-        env.write_text(env.read_text() + "BANSO_WEB_READ_MODE=direct\n")
-    else:
-        manifest = json.loads(manifest_path.read_text())
-        del manifest["runtime"]["read_mode_override"]
-        manifest_path.write_text(json.dumps(manifest))
+    manifest = json.loads(manifest_path.read_text())
+    manifest["runtime"]["read_mode_override"] = legacy_mode
+    manifest_path.write_text(json.dumps(manifest))
     prior_manifest = manifest_path.read_bytes()
     results_path = tmp_path / "runs" / "results.jsonl"
     prior_results = results_path.read_bytes()

@@ -11,11 +11,11 @@
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
 - `web-search-tavily` 提供搜索，网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，保留 DSH HTTP Fetch，可通过 `fetchProvider: http` 切回。
 - `prompt` 提供研究规则和每轮固定的 UTC 参考时间。用户通过消息指定历史日期或研究范围。参考时间按 agent 保存在内存中，恢复后的下一轮重新生成，研究中途热重载不保证保留原时间。
-- `materials` 支持启动时固定的 `readMode`：默认 `extract` 注册 `web_read(target, focus)` 并展示证据，`direct` 注册 `web_fetch(target)` 并展示正文，跳过提取 LLM；共用正文获取和保存逻辑。模式通过 Banso 的 `BANSO_WEB_READ_MODE` 传入，evaluation 只传 `.env` 显式覆盖，记录并校验 `manifest.runtime.read_mode_override`（未设置为 null）；实际生效配置读取留待后续。不支持同 session 中途切换，不新增正文截断或成本统计。
-- `materials` 内的网页工具模块包装原生 search 的短回执，并独立提供 `web_read(target, focus)`。直接调用 web 服务抓取，已有正文则复用，再用一次 LLM 调用提取紧凑证据。默认沿用主模型，可独立配置；输入超预算报错，不分块。read 使用扁平结果：可选正文、证据和错误信息，不维护抓取／提取状态枚举。Banso 关闭原生 fetch 工具，加载 DSH 工具超时策略。
+- `materials` 统一提供 `web_read({target, mode, focus?})`，每次显式选择 direct（正文）或 extract（按非空 focus 提取证据）。自动获取或复用正文，不再支持启动时的 readMode 或 BANSO_WEB_READ_MODE；evaluation 移除对应覆盖和 manifest 字段，旧实验不可直接续跑。
+- `materials` 包装原生 search 的短回执；read 使用扁平结果记录模式、可选正文、证据及错误。extract 默认沿用主模型，可独立配置；输入超预算报错，不分块。direct 不调用提取 LLM。Banso 关闭原生 fetch 工具，加载 DSH 工具超时策略。
 - `materials` 从工具日志保存正文、稳定 handle 和按 focus 追加的证据；提供 `materials_hide(handles)` 批量隐藏快照条目，保留底层材料，再次搜索命中同一 URL 或有效阅读结果会自动重新展示。全部隐藏时用空快照替换旧快照。提取失败保留正文与旧证据；extract 快照不展示全文，有证据后隐藏 snippet；direct 快照展示正文，有正文后隐藏 snippet，旧快照替换为占位。支持 JSONL 恢复和插件重载。
 
-`stateVersion` 保持 `1`，现有 read 日志仍可回放，新增 fetch 事件支持不需要历史迁移。首版没有刷新／过期、证据去重／合并、长文分块、上下文总量控制、长期资料库、业务预算或引用语义校验。
+`stateVersion` 为 `2`，材料逐条记录 displayMode，同一 session 可切换或混合阅读方式。不支持旧 web_fetch 或无 mode 的 web_read 日志恢复；升级后使用新会话。首版没有刷新／过期、证据去重／合并、长文分块、上下文总量控制、长期资料库、业务预算或引用语义校验。
 
 协议与行为详见 [网页工具与资料插件](../packages/materials/README.md) 和 [提示词插件](../packages/prompt/README.md)。
 

@@ -14,6 +14,7 @@ export interface Evidence {
 }
 
 export interface Material {
+  displayMode?: ReadMode | undefined
   handle: string
   hidden?: boolean | undefined
   url: string
@@ -25,7 +26,7 @@ export interface Material {
 }
 
 export interface PendingCall {
-  name: 'web_search' | 'web_read' | 'web_fetch' | 'materials_hide'
+  name: 'web_search' | 'web_read' | 'materials_hide'
   callId: string
   turn: number
 }
