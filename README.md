@@ -1,6 +1,6 @@
 # Banso DSH
 
-基于 DeepSeek Harness 的研究助手，支持网页搜索、阅读和证据提取，可通过 Web 聊天或 Python SDK 使用。
+基于 DeepSeek Harness 的搜索研究助手，在多步搜索与阅读中提取证据、整理资料并管理上下文，可通过 Web 聊天或 Python SDK 使用。
 
 ## Web 源码快速开始
 
