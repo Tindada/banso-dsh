@@ -25,7 +25,7 @@
 
 ## 运行配置
 
-搜索配置见 [Tavily provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-search-tavily/README.md)，阅读配置见 [Jina provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-fetch-jina/README.md)。组合保留 HTTP provider，可将 web 插件的 `fetchProvider` 改为 `http`。修改 profile patch 后重启运行环境。
+搜索默认使用 [Tavily provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-search-tavily/README.md)。组合同时注册官方 DeepSeek Search API provider，可在 profile patch 中将 web 插件的 `searchProvider` 改为 `deepseek-search-api`，默认复用 `DEEPSEEK_API_KEY`；替换 `config` 时须保留 `fetchProvider: jina`。阅读配置见 [Jina provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-fetch-jina/README.md)。组合保留 HTTP provider，可将 `fetchProvider` 改为 `http`。修改 profile patch 后重启运行环境。
 
 会话默认保存到 `~/.dsh/sessions-banso-base`，可通过 `DSH_HOME` 更换 home 位置。
 

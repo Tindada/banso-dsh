@@ -45,7 +45,7 @@ materials 内置 search/read 共享预算，默认每 turn 15 次，按工具调
 
 2026-10-15 新增 `web`、`ui` 两个包（当时尚未发布）。`banso-web` profile 按顺序加载 `banso-dsh` 和 `banso-dsh-web`，由后者停用 SDK 启动和 stdio 插件，追加官方通信、会话接口及依赖；`base/`、`banso/` 源码不变。复用已发布 DSH 的静态启动壳、renderer、ui-session 作用域适配及浏览器会话对象层，自定义根页面提供纯文本聊天、连续追问、流式回答、停止和错误提示。
 
-Web patch 默认选择官方 `deepseek-search-api` 搜索，加载 `dsh-web-deepseek-api`，搜索超时为 60 秒；阅读仍为 Jina，原 SDK 组合的 Tavily 默认值不变。2026-10-17 随 DSH `0.2.1-rc.2` 切换到独立 Search API，直接保留返回的 `snippet`；上游 provider 尚未保留 `summary`。
+Web patch 默认选择官方 `deepseek-search-api` 搜索，搜索超时为 60 秒；阅读仍为 Jina，原 SDK 组合的 Tavily 默认值不变。2026-10-17 随 DSH `0.2.1-rc.2` 切换到独立 Search API，直接保留返回的 `snippet`；上游 provider 尚未保留 `summary`。2026-10-18 将 `dsh-web-deepseek-api` 依赖和注册统一移至 `banso-dsh`，SDK 可通过 profile 选择它，Web 继承注册并覆盖默认选择。
 
 不提供历史列表、刷新恢复、Markdown 或资料面板。当前会话 ID 只存在页面内存，刷新后首次发送创建新会话；服务端 JSONL 持久化继续保留。刷新/关闭页面不等同于停止任务。
 

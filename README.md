@@ -60,30 +60,20 @@ Jina 密钥可选。不要分享或提交 `.env`，也不要在其中填写 `DSH
 
 #### 备选：不使用 Tavily
 
-可改用 DSH 官方搜索 provider，复用 `DEEPSEEK_API_KEY`，无需填写 `TAVILY_API_KEY`。安装 Banso 后执行：
-
-```bash
-pnpm exec dsh plugin --profile banso-dsh add @deepseek-ai/dsh-web-search-deepseek@0.2.0-rc.2
-```
+当前源码组合已注册 DSH 官方独立 Search API provider，复用 `DEEPSEEK_API_KEY`，无需填写 `TAVILY_API_KEY`。以下配置适用于当前源码；旧版已发布包不一定包含该插件。
 
 编辑 `~/.dsh/profiles/banso-dsh/cordis.patch.yml`，将初始的 `[]` 替换为以下内容；若已有配置，合并到现有列表中：
 
 ```yaml
 - id: web
   config:
-    searchProvider: deepseek-official
+    searchProvider: deepseek-search-api
     fetchProvider: jina
-
-- insert:
-    - id: web-search-deepseek
-      name: '@deepseek-ai/dsh-web-search-deepseek'
-      config:
-        apiKeyEnv: DEEPSEEK_API_KEY
 ```
 
 `config` 会整体替换，因此须保留 `fetchProvider: jina`。若使用自定义 `DSH_HOME`，修改该目录下对应的 profile 文件。保存后重新运行 SDK 即可；切回 Tavily 时将 `searchProvider` 改回 `tavily` 并提供其密钥。
 
-官方搜索会额外调用模型，产生相应 token 消耗和延迟；辅助搜索模型沿用该 provider 的默认值，与主模型独立。
+独立 Search API 不额外调用模型；上游 provider 保留短摘要 `snippet`，尚未保留长摘要 `summary`。Web 组合继承同一插件，默认选择 `deepseek-search-api`；SDK 默认仍为 Tavily。
 
 ### 3. 发起问答
 

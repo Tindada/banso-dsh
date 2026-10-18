@@ -19,6 +19,9 @@
     - id: web-search-tavily
       name: banso-dsh-web-search-tavily
 
+    - id: web-deepseek-api
+      name: '@deepseek-ai/dsh-web-deepseek-api'
+
     - id: web-fetch-jina
       name: banso-dsh-web-fetch-jina
 

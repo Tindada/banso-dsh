@@ -14,8 +14,6 @@
     fetch: false
     searchTimeoutMs: 60000
 - insert:
-    - id: web-deepseek-api
-      name: '@deepseek-ai/dsh-web-deepseek-api'
     - id: banso-web-startup
       name: banso-dsh-web
     - id: host-webserver
