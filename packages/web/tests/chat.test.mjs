@@ -76,7 +76,24 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     const send = page.getByRole('button', { name: '发送', exact: true });
     const input = page.getByLabel('你的问题');
     const ask = async text => { await input.fill(text); await send.click(); };
-    await ask('hello');
+    await input.fill('   ');
+    await input.press('Enter');
+    assert.equal(await input.inputValue(), '   ');
+    assert.equal(await page.locator('.user').count(), 0);
+    await input.fill('hello');
+    await input.press('Shift+Enter');
+    assert.equal(await input.inputValue(), 'hello\n');
+    assert.equal(await page.locator('.user').count(), 0);
+    // Synthetic IME events exercise the guards; real keyboard input below sends the message.
+    await input.dispatchEvent('compositionstart');
+    assert.equal(await input.evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))), true);
+    await input.dispatchEvent('compositionend');
+    for (const ime of [{ isComposing: true }, { keyCode: 229 }]) {
+      assert.equal(await input.evaluate((node, ime) => node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...ime })), ime), true);
+    }
+    assert.equal(await input.inputValue(), 'hello\n');
+    await input.press('Enter');
+    await input.press('Enter');
     await page.waitForFunction(() => {
       const text = document.querySelector('.assistant div')?.textContent;
       return text && text.length < '回答：hello'.length;

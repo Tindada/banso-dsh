@@ -52,6 +52,7 @@ function App({ ctx }: { ctx: Context }) {
   const reference = useRef<SessionReference>();
   const alive = useRef(true);
   const inFlight = useRef(false);
+  const composing = useRef(false);
   const connection = ctx.get('connection') as ConnectionHandle;
   const generation = useSyncExternalStore(listener => connection.generation.subscribe(listener), () => connection.generation.getSnapshot());
   useEffect(() => () => { alive.current = false; reference.current?.release(); }, []);
@@ -113,8 +114,16 @@ function App({ ctx }: { ctx: Context }) {
     {error && <p role="alert" className="banso-error">{error}</p>}
     <form onSubmit={event => { event.preventDefault(); void send(); }}>
       <label htmlFor="banso-input">你的问题</label>
-      <textarea id="banso-input" placeholder="想了解什么？" rows={3} value={input} onChange={event => setInput(event.target.value)} disabled={busy || running} />
-      <div className="banso-actions"><small>回答支持 Markdown</small>
+      <textarea id="banso-input" placeholder="想了解什么？" rows={3} value={input} onChange={event => setInput(event.target.value)} disabled={busy || running}
+        onCompositionStart={() => { composing.current = true; }}
+        onCompositionEnd={() => { composing.current = false; }}
+        onKeyDown={event => {
+          // Some IMEs report keyCode 229 when confirming text, even after compositionend.
+          if (event.key !== 'Enter' || event.shiftKey || composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+          event.preventDefault();
+          if (!event.repeat) void send();
+        }} />
+      <div className="banso-actions"><small>Enter 发送，Shift + Enter 换行</small>
         {running && <button type="button" disabled={stopping || !generation} onClick={() => void stop()}>停止</button>}
         <button type="submit" disabled={!input.trim() || busy || running || !generation}>{busy ? '发送中…' : '发送'}</button>
       </div>
