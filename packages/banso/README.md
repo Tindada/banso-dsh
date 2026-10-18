@@ -19,7 +19,7 @@
 
 ## 安装与启动
 
-安装、密钥配置和 Python SDK 示例见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/README.md)。
+安装、密钥配置和 Python SDK 示例见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/docs/install-npm.md#python-sdknpm-安装)。
 
 启动后提供 SDK stdio JSON-RPC 服务，没有聊天界面；客户端可负责启动和关闭服务。Web 聊天使用独立的 `banso-dsh-web` 组合。
 

@@ -51,7 +51,7 @@ Web patch 默认选择官方 `deepseek-search-api` 搜索，搜索超时为 60 �
 
 新增验证：消息投影单元测试、真实 DSH CLI + 临时 profile/home + 无头 Chromium 的聊天链路，以及 `--help` 不绑定端口。浏览器测试使用模拟模型，通过真实 HTTP/WebSocket、会话接口和默认 agent loop 验证流式回答、追问、取消、错误后继续聊天和刷新新建；模拟模型还检查 Banso 提示词及研究工具已加载。workspace 构建和类型检查、原有三项 Banso 组合回归测试通过。本机浏览器验证使用已有 Chromium 1208；当时未验证真实在线模型/搜索服务或全新机器安装；后续在线验证见下方发布状态。
 
-安装和启动见 [Web 聊天](../README.md#web-聊天npm-安装)，源码构建和测试见 [开发文档](development.md#web-开发与调试)，使用边界见 [Web 说明](../packages/web/README.md)。
+安装和启动见 [Web 聊天](install-npm.md#web-聊天npm-安装)，源码构建和测试见 [开发文档](development.md#web-开发与调试)，使用边界见 [Web 说明](../packages/web/README.md)。
 
 Web 聊天已增加逐次搜索、阅读状态及可折叠详情，复用官方会话工具事件；执行期间显示并行调用及结果，本轮完成、失败或停止后隐藏；模型的工具调用说明仅临时显示，回答保留。不增加后端接口。
 
@@ -76,4 +76,4 @@ Web 聊天已增加逐次搜索、阅读状态及可折叠详情，复用官方�
 
 本次覆盖本机独立目录安装和真实服务试跑，不等同于全新机器、所有平台或完整功能验证。安装、配置和启动需使用同一个 `DSH_HOME`；SDK 显式传入的 `dsh_home` 也必须与之对应。
 
-用户安装步骤见 [项目 README](../README.md)，源码开发见 [开发文档](development.md)，打包检查见 [发布文档](releasing.md)。
+npm 安装步骤见 [安装文档](install-npm.md)，源码开发见 [开发文档](development.md)，打包检查见 [发布文档](releasing.md)。

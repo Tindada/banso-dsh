@@ -2,7 +2,7 @@
 
 `banso-dsh-web` 是追加在 `banso-dsh` 后的 Web bundle。它在自己的 patch 中停用 SDK 启动和 stdio 服务，不修改基础包或业务包；复用 DSH 的通信、会话对象、持久化和前端启动壳。
 
-本包组合 `banso-dsh-ui` 提供 Web 聊天。安装、密钥配置、启动和端口设置见 [Web 聊天使用说明](https://github.com/Tindada/banso-dsh/blob/main/README.md#web-聊天源码安装)，界面行为和限制见 [UI 说明](https://github.com/Tindada/banso-dsh/blob/main/packages/ui/README.md#展示与限制)。
+本包组合 `banso-dsh-ui` 提供 Web 聊天。安装、密钥配置、启动和端口设置见 [Web 聊天使用说明](https://github.com/Tindada/banso-dsh/blob/main/docs/install-npm.md#web-聊天npm-安装)，界面行为和限制见 [UI 说明](https://github.com/Tindada/banso-dsh/blob/main/packages/ui/README.md#展示与限制)。
 
 服务就绪后默认打开系统浏览器，使用终端输出的完整认证地址；`--no-open` 禁用自动打开。浏览器启动失败仅提示手动访问，不停止服务；`--help` 不启动服务或浏览器。修改 profile 配置后需重启服务。
 

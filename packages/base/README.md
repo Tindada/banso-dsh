@@ -15,7 +15,7 @@ pnpm exec dsh plugin --profile banso-base add banso-dsh-base@0.1.1
 pnpm exec dsh plugin --profile banso-base exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh-base"]'
 ```
 
-设置 `DEEPSEEK_API_KEY`，在 Python SDK 中选择 `profile="banso-base"`，由 SDK 启动和关闭 DSH。环境准备与 SDK 调用示例见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/README.md)，其中的 profile 替换为 `banso-base`。
+设置 `DEEPSEEK_API_KEY`，在 Python SDK 中选择 `profile="banso-base"`，由 SDK 启动和关闭 DSH。环境准备与 SDK 调用示例见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/docs/install-npm.md#python-sdknpm-安装)，其中的 profile 替换为 `banso-base`。
 
 ## 本包的身份提示词配置
 
@@ -48,7 +48,7 @@ harness = DeepSeekHarness(
 )
 ```
 
-SDK 会继承 Python 进程的环境变量，再应用 `env` 中的覆盖值。以上示例只展示配置；启动、调用和关闭步骤见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/README.md)。
+SDK 会继承 Python 进程的环境变量，再应用 `env` 中的覆盖值。以上示例只展示配置；启动、调用和关闭步骤见 [项目安装说明](https://github.com/Tindada/banso-dsh/blob/main/docs/install-npm.md#python-sdknpm-安装)。
 
 ## 来源与许可
 

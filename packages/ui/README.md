@@ -16,4 +16,4 @@
 
 当前会话 ID 仅保留在页面内存中，没有历史列表和刷新恢复；刷新后下一次发送会创建新会话。刷新或关闭页面不保证停止服务端任务。模型回答支持 Markdown 和 GFM（包括表格、删除线、任务列表和自动链接），流式生成期间持续渲染；未闭合语法可能暂时改变排版。原始 HTML 被忽略；用户消息和工具详情保持纯文本。宽表格和代码块支持横向滚动。支持 KaTeX 数学公式：`$E=mc^2$` 为行内公式，独立公式用单独成行的 `$$` 包围，也兼容独占一行的 `$$公式$$`（即使紧接上一行说明）；正文中的双美元公式仍按行内处理。同时支持 `\(...\)` 行内公式和 `\[...\]` 独立公式（可跨行）；行内代码、围栏代码块及缩进代码块中的分隔符保持原样，普通括号不会被当作公式。样式和字体随前端打包，无需 CDN；长独立公式可横向滚动。流式输出中未闭合或无效的公式可能暂时显示原文或错误标记，不影响后续回答。美元金额建议转义为 `\$10`，避免多个 `$` 被当作公式分隔符。暂不提供代码语法高亮或 Mermaid。
 
-安装和启动见 [Web 聊天使用说明](https://github.com/Tindada/banso-dsh/blob/main/README.md#web-聊天源码安装)。运行配置和存储说明见 [Web bundle](https://github.com/Tindada/banso-dsh/blob/main/packages/web/README.md)。源码构建、消息投影和测试见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md)。
+运行配置和存储说明见 [Web bundle](https://github.com/Tindada/banso-dsh/blob/main/packages/web/README.md)。源码构建、消息投影和测试见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md)。

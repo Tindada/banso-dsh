@@ -4,7 +4,7 @@
 
 ## 文档分工
 
-[根 README](../README.md) 提供安装与启动步骤；各包 README 说明配置、公共接口和使用限制，跨包链接使用完整仓库 URL。实现细节放在本文，发布流程见 [打包与发布](releasing.md)，进度与历史验证见 [迁移规划](plan.md)，待定事项见 [TODO](todos.md)。包 README 不记录发布进度或维护过程。
+[根 README](../README.md) 提供源码快速开始，[npm 安装文档](install-npm.md) 提供发布包安装与 SDK 调用步骤；各包 README 说明配置、公共接口和使用限制，跨包链接使用完整仓库 URL。实现细节放在本文，发布流程见 [打包与发布](releasing.md)，进度与历史验证见 [迁移规划](plan.md)，待定事项见 [TODO](todos.md)。包 README 不记录发布进度或维护过程。
 
 ## 构建与源码 profile
 
@@ -37,7 +37,7 @@ pnpm exec dsh plugin --profile banso-web add 'link:/absolute/path/to/banso-dsh/p
 pnpm exec dsh plugin --profile banso-web exec npm pkg set --json 'dsh.profile.bundles=["banso-dsh","banso-dsh-web"]'
 ```
 
-密钥配置和启动见 [Web 聊天](../README.md#web-聊天npm-安装)，开发时在仓库根目录放置 `.env` 并启动。修改 UI 后运行 `pnpm build`，重启服务并刷新页面；当前没有开发热更新。修改 Web patch 后也需重启。
+密钥配置和启动见 [Web 源码快速开始](../README.md#web-源码快速开始)，开发时在仓库根目录放置 `.env` 并启动。修改 UI 后运行 `pnpm build`，重启服务并刷新页面；当前没有开发热更新。修改 Web patch 后也需重启。
 
 ```sh
 pnpm exec dsh --profile banso-web --dump-config
