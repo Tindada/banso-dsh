@@ -525,6 +525,9 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
+      open:
+        specifier: ^11.0.4
+        version: 11.0.4
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.5

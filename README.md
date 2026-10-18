@@ -169,12 +169,14 @@ Web 默认使用官方搜索 provider `deepseek-official`，与主模型复用 `
 pnpm exec dsh --profile banso-web
 ```
 
-在浏览器中打开终端输出的 `Banso Web:` 完整地址，包括本次进程的访问 token。默认仅监听 `127.0.0.1:3080`，不会自动打开浏览器。聊天会调用真实服务并消耗 API 额度。
+服务就绪后默认使用系统默认浏览器打开完整认证地址。终端仍输出 `Banso Web:` 地址（包括本次进程的访问 token）；自动打开失败时可手动访问。默认仅监听 `127.0.0.1:3080`。聊天会调用真实服务并消耗 API 额度。
 
 可通过 `--port <端口号>` 指定未被占用的监听端口，下面的 `3081` 仅为示例；`--help` 查看帮助：
 
 ```sh
 pnpm exec dsh --profile banso-web --port 3081
+# SSH、无桌面环境或不希望自动打开浏览器时
+pnpm exec dsh --profile banso-web --no-open
 pnpm exec dsh --profile banso-web --help
 ```
 

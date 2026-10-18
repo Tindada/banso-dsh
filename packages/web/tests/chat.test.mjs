@@ -44,7 +44,7 @@ async function fixture(t) {
 
 test('real profile and browser: chat, stream, follow-up, stop, error, refresh', { timeout: 120000 }, async t => {
   const { env } = await fixture(t);
-  const child = spawn(process.execPath, [cli, '--profile', 'banso-web', '--port', '0'], { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [cli, '--profile', 'banso-web', '--port', '0', '--no-open'], { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   const exited = once(child, 'exit');
   t.after(async () => {
@@ -191,5 +191,6 @@ test('--help exits without binding HTTP', { timeout: 30000 }, async t => {
   const [code] = await once(child, 'exit');
   assert.equal(code, 0, output);
   assert.match(output, /--port/);
+  assert.match(output, /--no-open/);
   assert.doesNotMatch(output, /Banso Web:/);
 });
