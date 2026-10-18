@@ -53,12 +53,31 @@ class Model extends LlmAdapter {
     // Leave time to inspect completed tool details before the turn ends.
     if (text === 'tools') await delay(4000, undefined, { signal: request.signal });
     if (text === 'error') throw new Error('fixture model failure');
-    const answer = `回答：${text}`;
+    const math = text === 'math';
+    const markdown = math || text.startsWith('markdown');
+    const answer = math ? [
+      '行内公式：$E=mc^2$。', '',
+      '$$', '\\frac{1}{2} + \\sum_{i=1}^{n} i = ' + 'x+'.repeat(35) + '1', '$$', '',
+      '**单行公式**', '$$x=1$$', '',
+      '金额：\\$10 与 \\$20；单个金额 $30。', '',
+      '错误公式：$\\frac{$', '',
+      String.raw`另一种行内公式：\(35\times20=700\)。`, '',
+      String.raw`\[`, String.raw`Q=\frac{300}{15}=20`, String.raw`\]`, '',
+      '公式完成',
+    ].join('\n') : markdown ? [
+      '## 研究结论', '',
+      '[来源](https://example.com/source)', '',
+      '| 指标 | 一月 | 二月 | 三月 | 四月 |', '| --- | --- | --- | --- | --- |', '| 数值 | 1 | 2 | 3 | 4 |', '',
+      '```python', 'print("' + 'long-code-'.repeat(20) + '")', '```', '',
+      '<script>window.markdownExecuted = true</script>', '', '渲染完成',
+    ].join('\n') : `回答：${text}`;
     yield { type: 'block-start', index: 0, blockType: 'text' };
-    for (const char of answer) {
+    // Only the short streaming/cancellation cases need artificial per-character delays.
+    const chunks = text === 'hello' || text === 'slow' ? [...answer] : [answer];
+    for (const chunk of chunks) {
       if (request.signal?.aborted) { yield { type: 'finish', reason: { kind: 'aborted' } }; return; }
-      yield { type: 'text-delta', index: 0, text: char };
-      await sleep(text === 'slow' ? 700 : 60);
+      yield { type: 'text-delta', index: 0, text: chunk };
+      if (chunks.length > 1) await sleep(text === 'slow' ? 700 : 60);
     }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: answer } };
     yield { type: 'finish', reason: { kind: 'stop' } };

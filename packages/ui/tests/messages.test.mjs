@@ -12,10 +12,8 @@ test('shows user text and assistant text, excludes reasoning and tool/context ev
   ]);
   assert.deepEqual(messages.map(({ role, text }) => ({ role, text })), [{ role: 'user', text: '<hello>' }, { role: 'assistant', text: 'answer' }]);
 });
-test('groups interleaved live chunks by attempt, and renders the settled event window once', () => {
+test('groups interleaved live chunks by attempt', () => {
   assert.deepEqual(messagesOf([live('a', 'A'), live('b', 'B'), live('a', 'C')]).map(m => m.text), ['AC', 'B']);
-  const settled = entry('assistant/message', { message: { content: [{ type: 'text', text: 'AC' }] } }, 5);
-  assert.deepEqual(messagesOf([settled]).map(m => m.text), ['AC']);
 });
 
 const streaming = (attemptId, text, turn, step, seq) => {

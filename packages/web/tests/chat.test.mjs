@@ -115,9 +115,6 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     assert.match(await failed.innerText(), /Extraction failed:/);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
-    await mkdir(join(root, 'packages/web/lib'), { recursive: true });
-    await failed.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: join(root, 'packages/web/lib/tool-status-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.waitForFunction(() => !document.querySelector('textarea').disabled);
     assert.equal(await page.locator('.assistant').filter({ hasText: '我找到了相关来源，现在开始阅读。' }).count(), 0);
@@ -135,15 +132,50 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     await page.getByRole('alert').filter({ hasText: 'fixture after tools failure' }).waitFor();
     await page.waitForFunction(() => !document.querySelector('textarea').disabled);
     assert.equal(await page.locator('.banso-tool').count(), 0);
+    await ask('markdown **用户原文** <b>保留标签</b>');
+    await page.locator('.assistant h2').filter({ hasText: '研究结论' }).waitFor();
+    await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    const markdown = page.locator('.assistant').last();
+    assert.equal(await markdown.getByRole('link', { name: '来源', exact: true }).getAttribute('href'), 'https://example.com/source');
+    assert.equal(await markdown.locator('table tbody td').count(), 5);
+    assert.match(await markdown.locator('pre code').innerText(), /^print\(/);
+    assert.match(await markdown.innerText(), /渲染完成/);
+    assert.equal(await markdown.locator('script').count(), 0);
+    assert.equal(await page.evaluate(() => window.markdownExecuted), undefined);
+    assert.equal(await page.locator('.user').last().locator('strong').count(), 1);
+    assert.equal(await page.locator('.user').last().locator('b').count(), 0);
+    assert.match(await page.locator('.user').last().innerText(), /\*\*用户原文\*\* <b>保留标签<\/b>/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    for (const selector of ['table', 'pre']) {
+      assert.equal(await markdown.locator(selector).evaluate(node =>
+        node.scrollWidth > node.clientWidth && getComputedStyle(node).overflowX === 'auto'), true);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await ask('math');
+    await page.locator('.assistant').last().locator('.katex').first().waitFor();
+    await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    const math = page.locator('.assistant').last();
+    assert.equal(await math.locator('.katex').count(), 5);
+    assert.equal(await math.locator('.katex-display').count(), 3);
+    assert.equal(await math.locator('.katex-error').count(), 1);
+    assert.equal(await math.locator('.katex-display annotation').nth(1).textContent(), 'x=1');
+    assert.match(await math.innerText(), /金额：\$10 与 \$20；单个金额 \$30/);
+    assert.match(await math.innerText(), /公式完成/);
+    await page.evaluate(async () => { await document.fonts.ready; });
+    assert.equal(await page.evaluate(() => [...document.fonts].some(font => font.family === 'KaTeX_Main' && font.status === 'loaded')), true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    assert.equal(await math.locator('.katex-display').first().evaluate(node =>
+      node.scrollWidth > node.clientWidth && getComputedStyle(node).overflowX === 'auto'), true);
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.reload();
     await input.waitFor();
     assert.equal(await page.locator('.banso-message').count(), 0);
     await ask('fresh');
     await page.locator('.assistant').filter({ hasText: '回答：fresh' }).waitFor();
-    assert.equal(await page.locator('.user').count(), 1);
     await page.waitForFunction(() => !document.querySelector('textarea').disabled);
-    await mkdir(join(root, 'packages/web/lib'), { recursive: true });
-    await page.screenshot({ path: join(root, 'packages/web/lib/chat-smoke.png'), fullPage: true });
+    assert.equal(await page.locator('.user').count(), 1);
     assert.deepEqual(errors, []);
   } catch (error) {
     await page.locator('details').evaluateAll(nodes => nodes.forEach(node => { node.open = true; }));
