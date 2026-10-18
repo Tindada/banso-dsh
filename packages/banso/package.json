@@ -15,7 +15,6 @@
     "banso-dsh-base": "workspace:*",
     "@deepseek-ai/dsh-web": "0.2.1-rc.2",
     "@deepseek-ai/dsh-web-deepseek-api": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-web-fetch-http": "0.2.1-rc.2",
     "@deepseek-ai/dsh-tool-web": "0.2.1-rc.2",
     "banso-dsh-web-search-tavily": "workspace:*",
     "banso-dsh-prompt": "workspace:*",

@@ -25,9 +25,6 @@
     - id: web-fetch-jina
       name: banso-dsh-web-fetch-jina
 
-    - id: web-fetch-http
-      name: '@deepseek-ai/dsh-web-fetch-http'
-
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'
       config:

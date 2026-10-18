@@ -9,7 +9,7 @@
 依赖已升级至 DSH `0.2.1-rc.2`、Cordis `4.0.5`（2026-10-17）。类型检查、构建及 74 项测试通过；Python SDK `0.1.5rc1` 和 Web 真实在线调用验证通过，Web 页面显示正常。已移除 invariant 组合，base 增加文件系统与工作目录服务，Web 增加 remote-access 并复用 base 文件系统。下文历史验证保留当时的版本记录。项目使用 pnpm workspace：
 
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
-- `web-search-tavily` 提供搜索，网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，保留 DSH HTTP Fetch，可通过 `fetchProvider: http` 切回。
+- `web-search-tavily` 提供搜索，网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，可通过 `fetchProvider: deepseek-fetch-api` 切换到 DeepSeek Fetch。
 - `prompt` 提供研究规则和每轮固定的 UTC 参考时间。用户通过消息指定历史日期或研究范围。参考时间按 agent 保存在内存中，恢复后的下一轮重新生成，研究中途热重载不保证保留原时间。
 - `materials` 统一提供 `web_read({target, mode, focus?})`，每次显式选择 direct（正文）或 extract（按非空 focus 提取证据）。自动获取或复用正文，不再支持启动时的 readMode 或 BANSO_WEB_READ_MODE；evaluation 移除对应覆盖和 manifest 字段，旧实验不可直接续跑。
 - `materials` 包装原生 search 的短回执；read 使用扁平结果记录模式、可选正文、证据及错误。extract 默认沿用主模型，可独立配置；输入超预算报错，不分块。direct 不调用提取 LLM。Banso 关闭原生 fetch 工具，加载 DSH 工具超时策略。
