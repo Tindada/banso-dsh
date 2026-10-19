@@ -4,9 +4,11 @@
 
 ## 集成要求
 
-需要 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务，以及可用的搜索和抓取 provider。组合时保留原生 `web_search`，关闭原生 `web_fetch`，避免与本插件的阅读工具重复；Banso bundle 已完成这些配置。
+需要 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务，以及可用的搜索和抓取 provider。组合时保留原生 `web_search`。插件自动从模型工具列表过滤 `web_fetch`，并通过 DSH 工具 guard 拒绝同名调用，统一使用 `web_read` 阅读网页。
 
-搜索包装以每个 agent 当前可见的 `web_search` 为准，不比较它与全局工具是否相同；支持从宿主或 preset 作用域继承的搜索工具，包括遵循 DSH 原生搜索结果协议的自定义实现。插件接管工具描述和模型输出渲染，保留执行逻辑与 metadata。包装注册在 agent 作用域；DSH 不允许同一作用域重复注册同名工具，因此不能与直接注册在 agent 自身作用域的 `web_search` 共存。标准 Web 应在所用 preset 内关闭原生 `web_fetch`。
+搜索包装以每个 agent 当前可见的 `web_search` 为准，不比较它与全局工具是否相同；支持从宿主或 preset 作用域继承的搜索工具，包括遵循 DSH 原生搜索结果协议的自定义实现。插件接管工具描述和模型输出渲染，保留执行逻辑与 metadata。包装注册在 agent 作用域；DSH 不允许同一作用域重复注册同名工具，因此不能与直接注册在 agent 自身作用域的 `web_search` 共存。标准 Web 无需为了本插件额外关闭 preset 内的原生 `web_fetch`。
+
+fetch 禁用策略按工具名作用于宿主、preset 和 agent 自身注册的工具，不注销工具或修改其他插件配置；`ctx.tools.get()` 仍可找到原注册，底层 `ctx.web.fetch()` 不受影响。当前宿主层加载时策略作用于该运行环境中的 agent。卸载后撤销过滤、guard 和提示词覆盖；Banso 保留的 `fetch: false` 配置仍然有效，不会因卸载而开启工具。策略不追溯取消已开始的抓取，也不阻止绕过 DSH 工具执行链路的直接调用。被拒绝的 `web_fetch` 不计入 search/read 研究预算。
 
 在 Banso profile 中，插件配置放在 `banso-materials` 注册项的 `config` 下。阅读方式由每次工具调用的 `mode` 决定。
 

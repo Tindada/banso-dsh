@@ -18,10 +18,10 @@ export function registerWebGuidance(ctx: Context): void {
     const assembly = await next()
     return {
       ...assembly,
-      sections: assembly.sections.map(section => section.name === 'tool:web_search'
+      sections: assembly.sections.map(section => section.name === 'tool:web_search' || section.name === 'tool:web_fetch'
         ? {
             ...section,
-            // Materials guidance and the wrapped description replace native search guidance.
+            // Materials owns search guidance and replaces native fetch with web_read.
             text: '',
           }
         : section),

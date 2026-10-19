@@ -47,7 +47,7 @@ class Adapter extends LlmAdapter {
     yield { type: 'finish', reason: this.finish }
   }
 }
-async function harness(t, { native = true, wrapper = true, projection = true, full = false, options = {} } = {}) {
+async function harness(t, { native = true, fetch = false, wrapper = true, projection = true, full = false, options = {} } = {}) {
   const ctx = new Context()
   t.after(() => ctx.fiber.dispose())
   for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
@@ -75,7 +75,7 @@ async function harness(t, { native = true, wrapper = true, projection = true, fu
   } })
   const adapter = new Adapter()
   ctx.llm.registerAdapter(['mock'], adapter)
-  const nativeFiber = native ? await ctx.plugin(NativeTools, { fetch: false }) : undefined
+  const nativeFiber = native ? await ctx.plugin(NativeTools, { fetch }) : undefined
   const wrapperFiber = wrapper ? await ctx.plugin(full ? Materials : WebToolFixture, { ...config, ...options }) : undefined
   let count = 0
   const create = setup => ctx.agents.create({ sessionId: SessionId(`agent-${++count}`), ...(setup ? { setup } : {}) })
@@ -84,6 +84,72 @@ async function harness(t, { native = true, wrapper = true, projection = true, fu
   return { ctx, results, calls, adapter, items, urlIndex, nativeFiber, wrapperFiber, create, execute }
 }
 const textOf = result => result.content.map(block => block.text).join('\n')
+
+for (const placement of ['host', 'preset', 'agent']) {
+  test(`materials blocks ${placement} fetch and restores it on unload`, async t => {
+    const h = await harness(t, { native: false, wrapper: false, full: true })
+    let setup
+    if (placement === 'host') await h.ctx.plugin(NativeTools, { search: false, fetch: true })
+    if (placement === 'preset') {
+      const key = {}
+      const preset = createScope(h.ctx, key)
+      await preset.ctx.plugin(NativeTools, { search: false, fetch: true })
+      setup = c => { bindScopeParent(scopeOf(c), key) }
+    }
+    if (placement === 'agent') setup = async c => { await c.plugin(NativeTools, { search: false, fetch: true }) }
+    const { agent } = await h.create(setup)
+    const assemble = () => h.ctx.systemPrompt.assemble({ agent, scope: agent })
+    const original = h.ctx.tools.get('web_fetch', agent)
+    const before = await assemble()
+    assert.ok(before.tools.some(tool => tool.name === 'web_fetch'))
+    assert.ok(before.sections.find(section => section.name === 'tool:web_fetch')?.text)
+    for (let cycle = 0; cycle < 2; cycle++) {
+      const materials = await h.ctx.plugin(Materials, config)
+      const active = await assemble()
+      assert.equal(active.tools.some(tool => tool.name === 'web_fetch'), false)
+      assert.equal(active.sections.find(section => section.name === 'tool:web_fetch')?.text, '')
+      assert.ok(active.tools.some(tool => tool.name === 'web_read'))
+      assert.equal(h.ctx.tools.get('web_fetch', agent), original)
+      const callsBefore = h.calls.length
+      const denied = await h.execute(agent, 'web_fetch', { url })
+      assert.equal(denied.isError, true)
+      assert.match(textOf(denied), /web_fetch is disabled by materials; use web_read instead/)
+      assert.equal(h.calls.length, callsBefore)
+      for (const mode of ['direct', 'extract']) {
+        const read = await h.execute(agent, 'web_read', { target: url, mode, focus: 'facts' })
+        assert.notEqual(read.isError, true)
+      }
+      assert.equal(h.calls.length, callsBefore + 2)
+      await materials.dispose()
+      assert.deepEqual(await assemble(), before)
+      const fetched = await h.execute(agent, 'web_fetch', { url })
+      assert.notEqual(fetched.isError, true)
+      assert.equal(h.calls.length, callsBefore + 3)
+    }
+  })
+}
+
+test('materials blocks fetch loaded later and does not enable an absent fetch on unload', async t => {
+  const h = await harness(t, { native: false, full: true })
+  const { agent } = await h.create()
+  assert.equal(h.ctx.tools.get('web_fetch', agent), undefined)
+  const native = await h.ctx.plugin(NativeTools, { search: false, fetch: true })
+  const later = await h.create()
+  for (const target of [agent, later.agent]) {
+    const assembly = await h.ctx.systemPrompt.assemble({ agent: target, scope: target })
+    assert.equal(assembly.tools.some(tool => tool.name === 'web_fetch'), false)
+    assert.equal((await h.execute(target, 'web_fetch', { url })).isError, true)
+  }
+  assert.equal(h.calls.length, 0)
+  await native.dispose()
+  await h.wrapperFiber.dispose()
+  assert.equal(h.ctx.tools.get('web_fetch', agent), undefined)
+  const disabled = await h.ctx.plugin(NativeTools, { fetch: false })
+  const materials = await h.ctx.plugin(Materials, config)
+  await materials.dispose()
+  assert.equal(h.ctx.tools.get('web_fetch', agent), undefined)
+  await disabled.dispose()
+})
 
 test('tool guidance replaces native search, follows visibility, and restores on disposal', async t => {
   const h = await harness(t, { wrapper: false }), { agent } = await h.create()

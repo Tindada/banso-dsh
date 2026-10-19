@@ -23,6 +23,8 @@ materials 内置 search/read 共享预算，默认每 turn 15 次，按工具调
 
 ## 验证范围
 
+materials 自动禁用原生 `web_fetch` 后，包内类型检查、编译和 46 项测试通过，Banso 6 项组合测试通过。本次直接执行包脚本对应的本地 `tsc` 和 `node --test` 命令；Banso 本地 HTTP 测试在允许监听端口的环境下运行。新增覆盖宿主、preset 父作用域和 agent 自有 fetch 的工具列表过滤、执行拒绝、提示词清理、加载顺序、卸载恢复及重载；direct/extract 仍可调用底层抓取服务。使用模拟 provider，未进行标准 DSH Web 浏览器端到端或在线服务验证。保留 Banso 的 `fetch: false` 配置，不更改会话协议和研究预算计数。
+
 共享研究预算实现后，workspace 类型检查、构建及 materials（40 项）、banso（6 项）测试通过。覆盖严格执行上限、异步前置检查顺序、预算快照、跨 turn 重置、隔离与卸载、日志重放和 JSONL 恢复；使用模拟模型与 provider，未运行付费在线评估。
 
 以下记录各阶段的验证结果，测试数量以当时为准。当前开发与验证命令见 [开发文档](development.md)。

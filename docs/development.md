@@ -55,6 +55,7 @@ pnpm exec dsh --profile banso-web --dump-config
 | --- | --- | --- |
 | 注册 | `index.ts`：`ctx.sessionProjections.register()`、`ctx.tools.register()` | 注册资料和快照投影、隐藏工具，以及统一的 `web_read` 工具 |
 | 搜索包装 | `tools/search.ts` | 包装 agent 当前可见的搜索工具，保留参数、执行逻辑和 metadata，将模型回执改为简短输出 |
+| fetch 禁用 | `tools/fetch-policy.ts`：`system-prompt/assemble`、`ctx.tools.guard()` | 从模型工具列表过滤 `web_fetch` 并拒绝同名执行，保留底层抓取服务；随插件卸载撤销 |
 | 正文获取 | `tools/page.ts`：`ctx.web.fetch()`、`formatFetchOutput(result, Infinity)` | 解析 handle、复用正文，或调用 provider 并格式化正文；保留 provider 截断 |
 | 证据提取 | `extraction/extract.ts`：`ctx.llm.stream()`、`BlockAssembler` | 单次无工具调用；输入 focus、标题和正文，解析含 `text` 字段的 JSON，保存证据和用量 |
 | 结果提交 | `tools/read.ts`、`tools/hide.ts` | 返回短回执与 metadata，由框架提交工具结果事件 |
@@ -95,7 +96,7 @@ search 沿用原生 metadata；web_read 的执行结果作为 metadata 保存。
 
 快照内容不变时复用；变化时用短占位替换旧快照，再追加新快照。消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。全部材料隐藏时生成空快照，从未收集材料时不插入。`bansoMaterialsSnapshot` 保存最新快照的 `{ messageId, seq }` 或 `null`；发现快照被外部覆盖时，下步重新插入。包入口导出对应的 `MaterialsSnapshotState` 类型。卸载停止后续更新，不撤销已写入消息。
 
-`context/guidance.ts` 使用 `ctx.systemPrompt.section()` 注册 `Materials snapshot:` 公共声明和工具指引，通过 `system-prompt/assemble` 中间件置空原生搜索指引；read/hide 的工具指引随作用域可见性生效。search 不重复添加系统指引；原生 `tool:web_search` 文本置空，快照语义由搜索 description 补充。卸载恢复原生描述与指引，并移除本插件声明。提取模型使用独立提示词，不受这些主 agent 指引影响。
+`context/guidance.ts` 使用 `ctx.systemPrompt.section()` 注册 `Materials snapshot:` 公共声明和工具指引，通过 `system-prompt/assemble` 中间件置空原生搜索和 fetch 指引；read/hide 的工具指引随作用域可见性生效。search 不重复添加系统指引；原生 `tool:web_search` 文本置空，快照语义由搜索 description 补充。卸载恢复原生描述与指引，并移除本插件声明。提取模型使用独立提示词，不受这些主 agent 指引影响。
 
 ### 提示词与参考时间
 

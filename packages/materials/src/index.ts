@@ -5,6 +5,7 @@ import z from '@deepseek-ai/schemastery'
 import { createReadTool } from './tools/read.js'
 import type { ReadConfig } from './tools/read.js'
 import { registerSearchWrapper } from './tools/search.js'
+import { registerFetchRestriction } from './tools/fetch-policy.js'
 import { registerWebGuidance } from './context/guidance.js'
 import { materialsProjection } from './state/projection.js'
 import { materialsSnapshotProjection } from './state/snapshot.js'
@@ -36,6 +37,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.tools.register(createReadTool(ctx, config))
   registerWebGuidance(ctx)
   registerSearchWrapper(ctx)
+  registerFetchRestriction(ctx)
   registerResearchBudget(ctx, config.researchBudget)
   registerMaterialsContext(ctx, config.researchBudget)
 }
