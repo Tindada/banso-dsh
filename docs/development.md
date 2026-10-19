@@ -100,6 +100,10 @@ search 沿用原生 metadata；web_read 的执行结果作为 metadata 保存。
 
 `context/guidance.ts` 使用 `ctx.systemPrompt.section()` 注册 `Materials snapshot:` 公共声明和工具指引，通过 `system-prompt/assemble` 中间件置空原生搜索和 fetch 指引；read/hide 的工具指引随作用域可见性生效。search 不重复添加系统指引；原生 `tool:web_search` 文本置空，快照语义由搜索 description 补充。卸载恢复原生描述与指引，并移除本插件声明。提取模型使用独立提示词，不受这些主 agent 指引影响。
 
+### Materials 研究预算实现
+
+`budget.ts` 在 `system-prompt/assemble` 过滤额度耗尽的 search/read，并通过 `ctx.tools.guard()` 拒绝超额执行。默认 loop 先写入 `tool/call`，再按顺序执行前置检查，最后并发执行工具，因此 guard 判断已经包含当前调用的 `used <= researchBudget`。每个 `turn/start` 重置用量；计数复用 materials projection，`stateVersion` 保持 `2`，不新增日志事件。完整日志重放可以重建预算，旧 projection 缓存缺少预算字段时不能作为零用量使用。
+
 ### 提示词与参考时间
 
 `packages/prompt/src/index.ts` 使用 DSH 的 `systemPrompt` 服务和 agent 事件，研究策略文本位于 `src/prompts.ts`：

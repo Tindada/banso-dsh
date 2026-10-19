@@ -37,8 +37,8 @@ pnpm --dir packages/materials pack --pack-destination /tmp/banso-dsh-release
 对本次发布的其他包重复执行，并检查生成 tarball 的内容：
 
 ```sh
-tar -tzf /tmp/banso-dsh-release/banso-dsh-materials-0.1.1.tgz
-tar -xOf /tmp/banso-dsh-release/banso-dsh-materials-0.1.1.tgz package/package.json
+tar -tzf /tmp/banso-dsh-release/banso-dsh-materials-0.1.2.tgz
+tar -xOf /tmp/banso-dsh-release/banso-dsh-materials-0.1.2.tgz package/package.json
 ```
 
 示例文件名来自当前源码版本，实际检查使用命令输出的文件名。检查包内 `package.json` 的版本、入口及依赖，确认没有残留的 `workspace:` 或本地链接。核对：入口和类型文件可用，生成 patch 完整，README、许可证和第三方声明齐备，没有密钥、测试截图或本地运行数据；包内相对链接能在解压目录中解析。跨仓库链接需另行检查。

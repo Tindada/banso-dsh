@@ -23,7 +23,7 @@ materials 内置 search/read 共享预算，默认每 turn 15 次，按工具调
 
 ## 验证范围
 
-materials 增加单插件 bundle 声明和随包加载 patch，现有 Banso 继续自行注册 materials，不在同一 profile 重复启用两种入口。本次包编译、类型检查和 47 项 materials 测试通过；新增测试使用 npm 打包并解包实际产物，经 DSH `0.2.1-rc.2` CLI 合成标准 Web 与 Banso 配置，确认每种组合各含一个 materials 注册项。测试未执行包管理器安装后的自动启用、标准 Web 浏览器启动或在线聊天；未发布新 npm 版本。
+materials 增加单插件 bundle 声明和随包加载 patch，现有 Banso 继续自行注册 materials，不在同一 profile 重复启用两种入口。本次包编译、类型检查和 47 项 materials 测试通过；新增测试使用 npm 打包并解包实际产物，经 DSH `0.2.1-rc.2` CLI 合成标准 Web 与 Banso 配置，确认每种组合各含一个 materials 注册项。另已人工验证本地 bundle 在标准 DSH Web 中安装、启用，以及搜索和直接阅读正常；未发布新 npm 版本。
 
 materials 自动禁用原生 `web_fetch` 后，包内类型检查、编译和 46 项测试通过，Banso 6 项组合测试通过。本次直接执行包脚本对应的本地 `tsc` 和 `node --test` 命令；Banso 本地 HTTP 测试在允许监听端口的环境下运行。新增覆盖宿主、preset 父作用域和 agent 自有 fetch 的工具列表过滤、执行拒绝、提示词清理、加载顺序、卸载恢复及重载；direct/extract 仍可调用底层抓取服务。使用模拟 provider，未进行标准 DSH Web 浏览器端到端或在线服务验证。保留 Banso 的 `fetch: false` 配置，不更改会话协议和研究预算计数。
 
@@ -64,6 +64,8 @@ Web 聊天已增加逐次搜索、阅读状态及可折叠详情，复用官方�
 测试围绕业务与集成边界：UI 覆盖消息过滤、流式去重、工具状态与生命周期，以及公式分隔符、代码保护和未闭合片段；Web 经真实 DSH CLI / HTTP / WebSocket 验证聊天、取消、错误恢复、刷新新会话，以及 Markdown / KaTeX 接入、HTML 隔离、字体加载和窄屏布局。完整麦克斯韦夹具已删除，独立公式回归由短用例覆盖；不逐项验证第三方 Markdown 库的基础语法，不生成例行截图，仅流式和取消场景保留模拟逐字延迟。浏览器使用模拟模型，不调用在线服务。
 
 ## 发布状态
+
+2026-10-19 准备单独发布 `banso-dsh-materials@0.1.2`，包含搜索作用域适配、自动禁用原生 fetch 和独立 bundle 支持。已检查一次 `0.1.2` tarball，随后调整 README，以 npm 和 Web UI 安装为主要入口，需重新打包检查；尚未发布，文档中的 npm 安装命令待发布后可用。此前标准 Web 人工验证使用本地 `0.1.1` 开发 tarball。Banso 的 `workspace:*` 引用保持不变，其他包不随本次升版，已发布的 Banso 包不会因此自动使用新版 materials。发布后再验证 npm 安装路径。
 
 2026-10-09 七个包已发布 `0.1.0`。本机独立目录从 npm 安装 DSH 后，仅指定入口包 `banso-dsh@0.1.0`，其余六包自动获取；完成配置合成和 Python SDK 在线验证，一次搜索返回八个来源，两次网页抓取及证据提取成功，正常结束。profile 中需单独批准 koffi 构建；missing peer 提示与 DSH 从宿主解析依赖的设计有关，本次运行未受影响。此验证不使用源码链接或 tarball，但未覆盖全新机器和完整功能。
 

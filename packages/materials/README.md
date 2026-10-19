@@ -4,17 +4,26 @@
 
 ## 独立 bundle 安装
 
-本包同时提供 Cordis 插件入口与 `dsh.bundle.patch`。安装到已有的标准 DSH Web profile 时，DSH CLI 可将本包加入 bundle 列表，启动时通过包内 `cordis.patch.yml` 在宿主层加载一次 `banso-materials`；无需再手写启用 overlay，也不替换标准 Web 界面。当前 DSH peer dependencies 为 `0.2.1-rc.2`，使用匹配版本验证和部署。
+支持 DSH `0.2.1-rc.2`。安装并启用后，在标准 Web 中提供资料管理和网页阅读能力，保留原有界面。
 
-在本仓库根目录打包，再把实际生成的 tarball 安装到已有的 Web profile：
+### 从 npm 安装
+
+在已安装 DSH 的环境中，将插件安装到已有的标准 Web profile，再启动 Web：
 
 ```sh
-pnpm --filter banso-dsh-materials pack
-pnpm exec dsh plugin --profile web add /absolute/path/banso-dsh-materials-0.1.1.tgz
-pnpm exec dsh --profile web
+dsh plugin --profile web add banso-dsh-materials@0.1.2
+dsh --profile web
 ```
 
-命令中的 tarball 路径需替换为实际产物路径；安装与启动使用相同的 `DSH_HOME`。独立 bundle 只加载 materials，搜索工具、网页 provider、模型凭据与超时策略仍由目标 profile 提供。自定义配置写在 profile 的 `cordis.patch.yml` 中，例如：
+若 DSH 安装在当前项目中，可将上述 `dsh` 替换为 `npx dsh` 或 `pnpm exec dsh`。安装与启动使用相同的 `DSH_HOME`。
+
+### 从 Web UI 安装
+
+在标准 Web 的插件管理页选择“添加插件”，输入 `banso-dsh-materials@0.1.2`，完成安装后点击“立即启用”。新建会话使用插件。
+
+### Profile 配置
+
+独立 bundle 只加载 materials，搜索工具、网页 provider、模型凭据与超时策略仍由目标 profile 提供。自定义配置写在 profile 的 `cordis.patch.yml` 中，例如：
 
 ```yaml
 - id: banso-materials
@@ -22,22 +31,21 @@ pnpm exec dsh --profile web
     researchBudget: 10
 ```
 
-已有 Banso profile 继续只启用 `banso-dsh`（Web 再追加 `banso-dsh-web`）：Banso 已在自己的 patch 中注册 materials，不要额外将 `banso-dsh-materials` 加入同一 profile 的 bundle 列表，也不要追加相同的 insert overlay。包作为 Banso 的间接依赖存在，不会因此自动应用它的 bundle patch；显式启用两份配置会重复声明同一注册项。
+已有 Banso 用户无需单独安装或启用本 bundle，Banso 已包含 materials。
 
 ## 集成要求
 
-需要 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务，以及可用的搜索和抓取 provider。组合时保留原生 `web_search`。插件自动从模型工具列表过滤 `web_fetch`，并通过 DSH 工具 guard 拒绝同名调用，统一使用 `web_read` 阅读网页。
+目标环境需提供 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务。搜索需启用原生 `web_search` 并配置搜索 provider；没有搜索工具时，仍可通过 `web_read` 读取已知 URL。网页阅读需要可用的抓取 provider。
 
-搜索包装以每个 agent 当前可见的 `web_search` 为准，不比较它与全局工具是否相同；支持从宿主或 preset 作用域继承的搜索工具，包括遵循 DSH 原生搜索结果协议的自定义实现。插件接管工具描述和模型输出渲染，保留执行逻辑与 metadata。包装注册在 agent 作用域；DSH 不允许同一作用域重复注册同名工具，因此不能与直接注册在 agent 自身作用域的 `web_search` 共存。标准 Web 无需为了本插件额外关闭 preset 内的原生 `web_fetch`。
+插件支持从宿主或 preset 继承的 `web_search`，包括遵循 DSH 原生搜索结果协议的自定义实现；接管搜索描述和结果文本，保留搜索执行逻辑。不能与直接注册在 agent 自身作用域的同名搜索工具共存。
 
-fetch 禁用策略按工具名作用于宿主、preset 和 agent 自身注册的工具，不注销工具或修改其他插件配置；`ctx.tools.get()` 仍可找到原注册，底层 `ctx.web.fetch()` 不受影响。当前宿主层加载时策略作用于该运行环境中的 agent。卸载后撤销过滤、guard 和提示词覆盖；Banso 保留的 `fetch: false` 配置仍然有效，不会因卸载而开启工具。策略不追溯取消已开始的抓取，也不阻止绕过 DSH 工具执行链路的直接调用。被拒绝的 `web_fetch` 不计入 search/read 研究预算。
-
-在 Banso profile 中，插件配置放在 `banso-materials` 注册项的 `config` 下。阅读方式由每次工具调用的 `mode` 决定。
+启用后自动禁用 `web_fetch`，由 `web_read` 统一阅读网页，无需额外设置 `fetch: false`。底层抓取服务不受影响；卸载后恢复原配置允许的工具，不会开启原本已关闭的工具。禁用不取消已经开始的抓取，也不限制绕过工具执行流程的直接调用。
 
 ## 配置
 
 | 字段 | 默认值 | 用途 |
 | --- | --- | --- |
+| `researchBudget` | 15 | 每轮允许的 search/read 调用次数；非负安全整数，0 禁用这两种调用 |
 | `provider`、`model` | 当前 session 最新请求的模型路由 | 必须成对覆盖；没有路由时提取失败 |
 | `maxInputBytes` | 200,000 | 提取系统提示词与序列化输入的 UTF-8 字节上限，超限报错而不截取 |
 | `maxOutputTokens` | 4,096 | 提取输出上限；达到上限不保存残缺证据 |
@@ -48,7 +56,6 @@ fetch 禁用策略按工具名作用于宿主、preset 和 agent 自身注册的
 提取请求显式使用 `reasoningEffort: off`，不继承主对话的思考配置。
 
 Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超时。单独组合本插件时也需加载该策略；仅声明 `timeoutMs` 不会启动计时器。
-
 
 ## 阅读模式
 
@@ -167,22 +174,14 @@ const material = state?.items.S1
 - `evidence` 为追加的证据组，每组保存 `focus`、`text` 和提取结果入库时间 `time`。失败和空结果不清除已有证据。
 - 正文复用不更改入库时间，也不重复记录全文。正文和证据的时间表示保存时间，单位为 Unix 毫秒。
 
-
 实现使用的依赖接口、事件与日志协议、快照管理和测试见 [开发文档](https://github.com/Tindada/banso-dsh/blob/main/docs/development.md#materials-注册与阅读链路)。
-
 
 ## 共享研究预算
 
-`researchBudget` 默认 `15`，接受非负安全整数；`0` 表示不提供研究工具。可在 profile patch 中覆盖：
+`researchBudget` 控制每轮 search/read 的共享额度，配置示例见上方 Profile 配置。每轮开始时用量清零，已有材料继续保留。
 
-```yaml
-- id: banso-materials
-  config:
-    researchBudget: 10
-```
+每次 `web_search` 或 `web_read` 调用尝试都计数，包括参数错误、失败、取消和被预算拒绝的调用。direct、extract 和正文缓存复用均计数，内部重试不重复计数；`materials_hide` 和被禁用的 `web_fetch` 不计数。因此尝试次数可以超过额度，但获准执行的研究调用不会超过额度。
 
-每个 `turn/start` 将用量清零，已有材料继续保留。每条 `web_search` 或 `web_read` 的 `tool/call` 计一次尝试，包括参数错误、失败、取消和被预算拒绝的调用。direct、extract、缓存复用均计一次，内部重试不重复计数，`materials_hide` 不计数。因此尝试次数可以超过额度，获准执行的研究调用不会超过额度。
+资料快照显示总额度、尝试次数和剩余额度。耗尽后，search/read 不再提供给模型，继续调用也会被拒绝。本功能仅覆盖默认 agent loop 的直接工具调用，不支持绕过 loop 的直接执行或嵌套工具调用计量。
 
-预算与材料一起进入快照，无材料时也显示总额度、尝试次数和非负剩余额度。额度耗尽后过滤模型请求中的 search/read，并通过 DSH `tools.guard()` 拒绝继续调用；不额外注入收尾指令。默认 loop 先记录调用，再按顺序完成前置检查，最后并发执行，因此 guard 使用已经包含当前调用的 `used <= researchBudget`。本功能仅覆盖默认 loop 的直接工具调用，不支持绕过 loop 的直接 dispatch 或嵌套工具调用计量。
-
-预算复用 materials projection，`stateVersion` 保持 `2`，快照版本不变，不新增日志事件。完整 JSONL 重放根据既有 turn/tool 事件重建计数，包括旧日志中的研究调用。新版本不提供旧持久化 projection 缓存迁移；缺少 budget 字段的缓存不能当作零用量使用，应使用新会话或从完整日志重建。恢复后是否清零取决于是否产生新的 `turn/start`。修改配置不会改写调用历史，工具控制使用当前配置。
+完整会话日志可以重建用量；不提供旧持久化资料缓存的迁移，旧缓存缺少预算字段时应使用新会话或从完整日志重建。恢复会话本身不会清零，新一轮开始时才会清零。修改额度不会改写调用历史，后续工具控制使用当前配置。

@@ -1,6 +1,6 @@
 {
   "name": "banso-dsh-materials",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Web research tools, session-local materials and evidence snapshots",
   "type": "module",
   "license": "MIT",
