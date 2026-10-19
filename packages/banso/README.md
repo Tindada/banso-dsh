@@ -1,5 +1,7 @@
 # Banso 业务 bundle
 
+本组合已注册 `banso-materials`。`banso-dsh-materials` 的独立 bundle 用于其他 DSH profile；不要在启用本组合的同一 profile 中额外启用它或再次插入 materials 注册项。
+
 `banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取和 [Banso 提示词插件](https://github.com/Tindada/banso-dsh/blob/main/packages/prompt/README.md)，向 agent 提供 `web_search`、`web_read`、材料隐藏和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context；当前通过 `researchPrompt: ""` 关闭研究规则。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。

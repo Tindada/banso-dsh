@@ -49,6 +49,8 @@ pnpm exec dsh --profile banso-web --dump-config
 
 ### Materials 注册与阅读链路
 
+materials 包通过 `dsh.bundle.patch` 暴露单插件加载层，用于标准 Web 等外部 profile；Banso 仍由自己的 patch 注册同一个插件，两种入口不在同一 profile 叠加。`tests/bundle.test.mjs` 将编译产物打成 tarball 后解包，用已安装 DSH CLI 的 `--dump-config` 验证标准 Web 与 Banso 的配置各含一个 materials 注册项；这不等于浏览器端到端验证。测试依赖本机 `npm` 与 `tar`，打包跳过生命周期脚本，编译由包测试脚本先完成。
+
 以下文件路径相对于 `packages/materials/src/`。工具执行只读取资料状态，更新通过工具结果事件提交：
 
 | 环节 | 源码入口与依赖接口 | 职责 |
