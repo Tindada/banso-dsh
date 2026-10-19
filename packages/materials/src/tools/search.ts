@@ -50,8 +50,8 @@ export function registerSearchWrapper(ctx: Context): void {
         const disposers: (() => void)[] = []
         registrations.set(agent, disposers)
         for (const name of names) {
-          const original = ctx.tools.get(name)
-          if (original === undefined || ctx.tools.get(name, agent) !== original) continue
+          const original = ctx.tools.get(name, agent)
+          if (original === undefined) continue
           let wrapped = wrappers.get(original)
           if (wrapped === undefined) {
             wrapped = wrapWebTool(original)

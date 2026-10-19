@@ -6,6 +6,7 @@ import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
+import { createScope, bindScopeParent, scopeOf } from '@deepseek-ai/dsh-scope'
 import Agents from '@deepseek-ai/dsh-agent'
 import Loop from '@deepseek-ai/dsh-agent-loop'
 import Web from '@deepseek-ai/dsh-web'
@@ -233,8 +234,13 @@ test('search wrapper preserves native execution and visibility; read loads indep
   h.results.search = { sources: [], content: 'Provider answer', truncated: true }
   assert.match(textOf(await h.execute(a.agent, 'web_search')), /Provider answer/)
   const local = { ...original, output: { ...original.output, render: () => [{ type: 'text', text: 'Local' }] } }
-  const b = await h.create(c => { c.tools.register(local) })
-  assert.equal(h.ctx.tools.get('web_search', b.agent), local)
+  const presetKey = {}
+  const preset = createScope(h.ctx, presetKey)
+  await preset.ctx.plugin({ inject: ['tools'], apply(c) { c.tools.register(local) } })
+  const b = await h.create(c => { bindScopeParent(scopeOf(c), presetKey) })
+  assert.notEqual(h.ctx.tools.get('web_search', b.agent), local)
+  assert.equal(h.ctx.tools.get('web_search', b.agent).execute, local.execute)
+  assert.match(textOf(await h.execute(b.agent, 'web_search')), /Search completed/)
   const c = await h.create(c => { c.tools.restrict({ deny: ['web_read', 'web_search'] }) })
   assert.equal(h.ctx.tools.get('web_read', c.agent), undefined)
   assert.equal(h.ctx.tools.get('web_search', c.agent), undefined)
@@ -247,11 +253,39 @@ test('search wrapper preserves native execution and visibility; read loads indep
   const reloaded = await h.ctx.plugin(NativeTools, { fetch: false })
   assert.notEqual(h.ctx.tools.get('web_search', a.agent), h.ctx.tools.get('web_search'))
   await wrapper.dispose()
+  assert.equal(h.ctx.tools.get('web_search', b.agent), local)
   assert.equal(h.ctx.tools.get('web_read', a.agent), undefined)
   assert.equal(h.ctx.tools.get('web_search', a.agent), h.ctx.tools.get('web_search'))
   await h.ctx.plugin(WebToolFixture, config)
   assert.ok(h.ctx.tools.get('web_read', a.agent))
   await reloaded.dispose()
+})
+
+test('search inherited from a preset scope works without a global tool and restores on unload', async t => {
+  const h = await harness(t, { native: false })
+  const presetKey = {}
+  const preset = createScope(h.ctx, presetKey)
+  await preset.ctx.plugin(NativeTools, { fetch: false })
+  const original = h.ctx.tools.get('web_search', presetKey)
+  const a = await h.create(c => { bindScopeParent(scopeOf(c), presetKey) })
+  const b = await h.create()
+  assert.equal(h.ctx.tools.get('web_search'), undefined)
+  assert.equal(h.ctx.tools.get('web_search', b.agent), undefined)
+  assert.notEqual(h.ctx.tools.get('web_search', a.agent), original)
+  assert.equal(h.ctx.tools.get('web_search', a.agent).execute, original.execute)
+  assert.equal(textOf(await h.execute(a.agent, 'web_search')), 'Search completed. 1 sources returned. Truncated: false.')
+  const unrestrict = a.agent.ctx.tools.restrict({ deny: ['web_search'] })
+  assert.equal(h.ctx.tools.get('web_search', a.agent), undefined)
+  unrestrict()
+  assert.notEqual(h.ctx.tools.get('web_search', a.agent), original)
+  await h.wrapperFiber.dispose()
+  assert.equal(h.ctx.tools.get('web_search', a.agent), original)
+})
+
+test('agent-owned search cannot share its registration scope with a materials wrapper', async t => {
+  const h = await harness(t)
+  const original = h.ctx.tools.get('web_search')
+  await assert.rejects(h.create(c => { c.tools.register({ ...original }) }), /already registered in this scope/)
 })
 
 test('fetch and extraction cancellation propagate with no partial metadata', async t => {

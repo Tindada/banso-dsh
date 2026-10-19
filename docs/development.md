@@ -54,7 +54,7 @@ pnpm exec dsh --profile banso-web --dump-config
 | 环节 | 源码入口与依赖接口 | 职责 |
 | --- | --- | --- |
 | 注册 | `index.ts`：`ctx.sessionProjections.register()`、`ctx.tools.register()` | 注册资料和快照投影、隐藏工具，以及统一的 `web_read` 工具 |
-| 搜索包装 | `tools/search.ts` | 保留原生搜索参数和 metadata，将模型回执改为简短输出 |
+| 搜索包装 | `tools/search.ts` | 包装 agent 当前可见的搜索工具，保留参数、执行逻辑和 metadata，将模型回执改为简短输出 |
 | 正文获取 | `tools/page.ts`：`ctx.web.fetch()`、`formatFetchOutput(result, Infinity)` | 解析 handle、复用正文，或调用 provider 并格式化正文；保留 provider 截断 |
 | 证据提取 | `extraction/extract.ts`：`ctx.llm.stream()`、`BlockAssembler` | 单次无工具调用；输入 focus、标题和正文，解析含 `text` 字段的 JSON，保存证据和用量 |
 | 结果提交 | `tools/read.ts`、`tools/hide.ts` | 返回短回执与 metadata，由框架提交工具结果事件 |

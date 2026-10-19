@@ -6,6 +6,8 @@
 
 需要 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务，以及可用的搜索和抓取 provider。组合时保留原生 `web_search`，关闭原生 `web_fetch`，避免与本插件的阅读工具重复；Banso bundle 已完成这些配置。
 
+搜索包装以每个 agent 当前可见的 `web_search` 为准，不比较它与全局工具是否相同；支持从宿主或 preset 作用域继承的搜索工具，包括遵循 DSH 原生搜索结果协议的自定义实现。插件接管工具描述和模型输出渲染，保留执行逻辑与 metadata。包装注册在 agent 作用域；DSH 不允许同一作用域重复注册同名工具，因此不能与直接注册在 agent 自身作用域的 `web_search` 共存。标准 Web 应在所用 preset 内关闭原生 `web_fetch`。
+
 在 Banso profile 中，插件配置放在 `banso-materials` 注册项的 `config` 下。阅读方式由每次工具调用的 `mode` 决定。
 
 ## 配置
