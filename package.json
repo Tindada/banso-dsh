@@ -6,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r run build",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "dsh": "DSH_HOME=\"$PWD/.dsh\" dsh",
+    "dev": "pnpm run dsh --profile banso-web"
   },
   "keywords": [],
   "author": "",
