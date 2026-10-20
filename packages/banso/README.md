@@ -2,7 +2,7 @@
 
 本组合已注册 `banso-materials`。`banso-dsh-materials` 的独立 bundle 用于其他 DSH profile；不要在启用本组合的同一 profile 中额外启用它或再次插入 materials 注册项。
 
-`banso-dsh` 组合精简 SDK 基础环境、Tavily 搜索、Jina Reader 抓取和 [Banso 提示词插件](https://github.com/Tindada/banso-dsh/blob/main/packages/prompt/README.md)，向 agent 提供 `web_search`、`web_read`、材料隐藏和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
+`banso-dsh` 组合精简 SDK 基础环境、DeepSeek Search API 搜索、Jina Reader 抓取和 [Banso 提示词插件](https://github.com/Tindada/banso-dsh/blob/main/packages/prompt/README.md)，向 agent 提供 `web_search`、`web_read`、材料隐藏和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context；当前通过 `researchPrompt: ""` 关闭研究规则。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。
 
@@ -27,16 +27,16 @@
 
 ## 运行配置
 
-搜索默认使用 [Tavily provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-search-tavily/README.md)，阅读默认使用 [Jina provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-fetch-jina/README.md)。也可通过 profile patch 独立选择 DeepSeek Search 或 Fetch，二者默认复用 `DEEPSEEK_API_KEY`：
+搜索默认使用 DeepSeek Search API（`deepseek-search-api`），复用 `DEEPSEEK_API_KEY`，无需 Tavily 密钥；阅读默认使用 [Jina provider](https://github.com/Tindada/banso-dsh/blob/main/packages/web-fetch-jina/README.md)。也可通过 profile patch 切换 Fetch 为 DeepSeek Fetch，同样默认复用 `DEEPSEEK_API_KEY`：
 
 ```yaml
 - id: web
   config:
-    searchProvider: tavily
+    searchProvider: deepseek-search-api
     fetchProvider: deepseek-fetch-api
 ```
 
-如需同时切换搜索，将 `searchProvider` 改为 `deepseek-search-api`；切回 Jina 时，将 `fetchProvider` 改为 `jina`。`config` 会整体替换，因此须同时保留搜索和阅读的选择。修改 profile patch 后重启运行环境。
+如需使用 Tavily 搜索，将 `searchProvider` 改为 `tavily` 并提供 `TAVILY_API_KEY`；切回 Jina 时，将 `fetchProvider` 改为 `jina`。`config` 会整体替换，因此须同时保留搜索和阅读的选择。修改 profile patch 后重启运行环境。
 
 会话默认保存到 `~/.dsh/sessions-banso-base`，可通过 `DSH_HOME` 更换 home 位置。
 

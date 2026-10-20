@@ -13,7 +13,7 @@
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: tavily
+        searchProvider: deepseek-search-api
         fetchProvider: jina
 
     - id: web-search-tavily

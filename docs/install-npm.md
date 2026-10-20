@@ -114,15 +114,14 @@ profile 中的 missing peer 提示可能来自 DSH 的宿主依赖机制，不�
 
 ```dotenv
 DEEPSEEK_API_KEY=你的 DeepSeek API key
-TAVILY_API_KEY=你的 Tavily API key
 JINA_API_KEY=
 ```
 
 Jina 密钥可选。不要分享或提交 `.env`，也不要在其中填写 `DSH_BIN`、`DSH_HOME` 等启动配置。
 
-#### 备选：不使用 Tavily
+#### 搜索 provider 配置
 
-当前源码组合已注册 DSH 官方独立 Search API provider，复用 `DEEPSEEK_API_KEY`，无需填写 `TAVILY_API_KEY`。以下配置适用于当前源码；旧版已发布包不一定包含该插件。
+当前源码组合默认使用 DSH 官方独立 Search API provider，复用 `DEEPSEEK_API_KEY`，无需填写 `TAVILY_API_KEY`。以下显式配置也可用于覆盖旧默认值；旧版已发布包不一定包含该插件。
 
 编辑 `~/.dsh/profiles/banso-dsh/cordis.patch.yml`，将初始的 `[]` 替换为以下内容；若已有配置，合并到现有列表中：
 
@@ -135,7 +134,7 @@ Jina 密钥可选。不要分享或提交 `.env`，也不要在其中填写 `DSH
 
 `config` 会整体替换，因此须保留 `fetchProvider: jina`。若使用自定义 `DSH_HOME`，修改该目录下对应的 profile 文件。保存后重新运行 SDK 即可；切回 Tavily 时将 `searchProvider` 改回 `tavily` 并提供其密钥。
 
-独立 Search API 不额外调用模型；上游 provider 保留短摘要 `snippet`，尚未保留长摘要 `summary`。Web 组合继承同一插件，默认选择 `deepseek-search-api`；SDK 默认仍为 Tavily。
+独立 Search API 不额外调用模型；上游 provider 保留短摘要 `snippet`，尚未保留长摘要 `summary`。当前源码的 Web 与 SDK 组合均默认选择 `deepseek-search-api`。
 
 ### 3. 发起问答
 
