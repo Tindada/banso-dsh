@@ -120,6 +120,8 @@ search 沿用原生 metadata；web_read 的执行结果作为 metadata 保存。
 
 使用官方 `sessions.create/retain` 和 session 的 `beginSubmission/prompt/cancel`，订阅 snapshot 与 event source。`packages/ui/src/client/messages.ts` 投影用户文字、assistant 正文和实时片段；工具状态单独投影。卸载释放会话引用、样式和根插槽注册。展示行为见 [UI README](../packages/ui/README.md)。
 
+会话选择保存在 URL 的 `session` 参数中，等待目录就绪后打开历史；切换时释放引用，并隔离过期异步结果。`loadOlder()` 加载更早消息并保持阅读位置，`refreshProjections()` 补齐未打开会话的标题。重命名通过 `sessions.using()` 持有目标会话至保存结束，复用 `rename()` 持久化；Web 加载标题服务，不加载模型标题 provider。
+
 TypeScript 和 esbuild 生成 DSH `__ModuleLoader__.load` 工厂，React 使用宿主共享模块；不依赖 DSH 源码仓库的构建脚本。
 
 ## 测试与验证范围
@@ -132,8 +134,8 @@ TypeScript 和 esbuild 生成 DSH `__ModuleLoader__.load` 工厂，React 使用�
 | Materials | `pnpm --filter banso-dsh-materials test` | 共享研究预算（计数、工具过滤、guard、跨 turn 重置、隔离与卸载）、工具注册与卸载、投影重放、快照替换、隐藏恢复、预算与错误／取消／超时；direct 不调用提取模型 |
 | Prompt | `pnpm --filter banso-dsh-prompt test` | 真实 loop、模拟 LLM 与可控时钟；同轮固定、跨轮更新、agent 隔离及重载 |
 | Jina | `pnpm --filter banso-dsh-web-fetch-jina test` | 本地 HTTP 服务验证请求、响应、错误、截断、取消及生命周期 |
-| UI | `pnpm --filter banso-dsh-ui test` | 消息与工具状态投影 |
-| Web | `pnpm --filter banso-dsh-web test` | 真实 CLI、HTTP/WebSocket 与浏览器链路；流式回答、追问、取消、错误恢复、刷新及工具状态；`--help` 不绑定端口 |
+| UI | `pnpm --filter banso-dsh-ui test` | 消息与工具状态投影、URL、标题及相对时间 |
+| Web | `pnpm --filter banso-dsh-web test` | 真实 CLI、HTTP/WebSocket 与浏览器链路；聊天与工具状态、会话切换、分页、重命名、刷新／重连／重启恢复及操作菜单；`--help` 不绑定端口 |
 | Python 测评 | 在 `evaluation/` 执行 `uv run pytest` | 模拟 SDK、批量续跑和离线评分；准备步骤见 [测评文档](../evaluation/README.md) |
 
 Web 测试需先安装浏览器：

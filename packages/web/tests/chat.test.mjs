@@ -11,9 +11,14 @@ import { chromium } from 'playwright';
 const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const cli = join(dirname(require.resolve('@deepseek-ai/dsh/package.json')), 'lib/bin.js');
+const hostStops = new WeakMap();
 async function fixture(t) {
   const home = await mkdtemp(join(tmpdir(), 'banso-web-test-'));
-  t.after(() => rm(home, { recursive: true, force: true }));
+  const stops = [];
+  t.after(async () => {
+    for (const stop of stops) await stop();
+    await rm(home, { recursive: true, force: true });
+  });
   const profile = join(home, 'profiles', 'banso-web');
   await mkdir(join(profile, 'node_modules'), { recursive: true });
   const deps = { 'banso-dsh': 'workspace:*', 'banso-dsh-web': 'workspace:*' };
@@ -39,19 +44,20 @@ async function fixture(t) {
 `);
   const env = { ...process.env, DSH_HOME: home };
   delete env.DEEPSEEK_API_KEY; delete env.TAVILY_API_KEY; delete env.JINA_API_KEY;
+  hostStops.set(env, stops);
   return { home, env };
 }
 
-test('real profile and browser: chat, stream, follow-up, stop, error, refresh', { timeout: 120000 }, async t => {
-  const { env } = await fixture(t);
+async function startHost(env) {
   const child = spawn(process.execPath, [cli, '--profile', 'banso-web', '--port', '0', '--no-open'], { env, cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   const exited = once(child, 'exit');
-  t.after(async () => {
+  const stop = async () => {
     const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
     if (child.exitCode === null) child.kill('SIGTERM');
     await exited; clearTimeout(timer);
-  });
+  };
+  hostStops.get(env).push(stop);
   child.stdout.on('data', data => { output += data; });
   child.stderr.on('data', data => { output += data; });
   const url = await new Promise((resolve, reject) => {
@@ -64,6 +70,13 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     function cleanup() { clearTimeout(timer); clearInterval(poll); }
   });
   assert.doesNotMatch(output, /did not activate|failed to load/i);
+  return { url, stop, output: () => output };
+}
+
+test('real profile and browser: chat, stream, follow-up, stop, error, refresh', { timeout: 120000 }, async t => {
+  const { env } = await fixture(t);
+  const host = await startHost(env);
+  const { url } = host;
   const browser = await chromium.launch({ headless: true, ...(process.env.BANSO_TEST_CHROMIUM ? { executablePath: process.env.BANSO_TEST_CHROMIUM } : {}) });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -186,8 +199,12 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     assert.equal(await math.locator('.katex-display').first().evaluate(node =>
       node.scrollWidth > node.clientWidth && getComputedStyle(node).overflowX === 'auto'), true);
     await page.setViewportSize({ width: 1280, height: 900 });
+    const selectedUrl = page.url();
     await page.reload();
-    await input.waitFor();
+    await page.locator('.assistant .katex').first().waitFor();
+    await page.waitForFunction(() => !document.querySelector('textarea').disabled);
+    assert.equal(page.url(), selectedUrl);
+    await page.getByRole('button', { name: '新会话', exact: true }).click();
     assert.equal(await page.locator('.banso-message').count(), 0);
     await ask('fresh');
     await page.locator('.assistant').filter({ hasText: '回答：fresh' }).waitFor();
@@ -196,7 +213,7 @@ test('real profile and browser: chat, stream, follow-up, stop, error, refresh', 
     assert.deepEqual(errors, []);
   } catch (error) {
     await page.locator('details').evaluateAll(nodes => nodes.forEach(node => { node.open = true; }));
-    throw new Error(`${error}\nBrowser: ${await page.locator('body').innerText()}\nPage errors: ${errors.join('\n')}\nHost: ${output}`);
+    throw new Error(`${error}\nBrowser: ${await page.locator('body').innerText()}\nPage errors: ${errors.join('\n')}\nHost: ${host.output()}`);
   }
 });
 
@@ -210,4 +227,228 @@ test('--help exits without binding HTTP', { timeout: 30000 }, async t => {
   assert.match(output, /--port/);
   assert.match(output, /--no-open/);
   assert.doesNotMatch(output, /Banso Web:/);
+});
+
+test('session history: navigation, background work, paging, failures and restart', { timeout: 240000 }, async t => {
+  const { env } = await fixture(t);
+  let host = await startHost(env);
+  const browser = await chromium.launch({ headless: true, ...(process.env.BANSO_TEST_CHROMIUM ? { executablePath: process.env.BANSO_TEST_CHROMIUM } : {}) });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  let disconnected = false;
+  const sockets = [];
+  await page.routeWebSocket('**/*', socket => {
+    if (disconnected) { void socket.close(); return; }
+    const server = socket.connectToServer();
+    sockets.push([socket, server]);
+  });
+  page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const idle = () => page.waitForFunction(() => !document.querySelector('textarea').disabled);
+  const ask = async text => {
+    await idle(); await page.getByLabel('你的问题').fill(text);
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+  };
+  const answer = text => page.locator('.assistant').filter({ hasText: `回答：${text}` }).waitFor();
+  const newChat = () => page.getByRole('button', { name: '新会话', exact: true }).click();
+  const select = title => page.getByRole('navigation', { name: '历史会话' }).getByRole('button').filter({ has: page.locator('span', { hasText: new RegExp(`^${title}$`) }) }).click();
+  await page.goto(host.url);
+  await idle();
+  await page.evaluate(() => { const url = new URL(location.href); url.searchParams.set('other', 'a+b'); history.replaceState(null, '', url); });
+  const bootUrl = page.url();
+  try {
+    await ask('history-A'); await answer('history-A'); await idle();
+    const aUrl = page.url(), aId = new URL(aUrl).searchParams.get('session');
+    assert.ok(aId);
+    const auth = new URL(aUrl); auth.searchParams.delete('session');
+    assert.equal(auth.href, bootUrl);
+    await select('history-A'); await idle();
+    await ask('background');
+    await page.getByRole('button', { name: '停止', exact: true }).waitFor();
+    await newChat();
+    await ask('history-B'); await answer('history-B'); await idle();
+    const bUrl = page.url();
+    assert.notEqual(new URL(bUrl).searchParams.get('session'), aId);
+    assert.equal(await page.locator('.user').count(), 1);
+    await select('history-A');
+    await answer('background'); await idle();
+    await ask('verify-history-A'); await answer('verify-history-A'); await idle();
+    assert.equal(await page.locator('.user').count(), 3);
+    await select('history-B'); await idle();
+    await page.goBack(); await answer('verify-history-A'); await idle();
+    assert.equal(page.url(), aUrl);
+    await page.goForward(); await answer('history-B'); await idle();
+    assert.equal(page.url(), bUrl);
+    // Two rapid selections must leave the final selection authoritative.
+    await select('history-A');
+    await select('history-B');
+    await answer('history-B'); await idle();
+    assert.equal(await page.locator('.user').count(), 1);
+    await page.reload(); await answer('history-B'); await idle();
+    assert.equal(page.url(), bUrl);
+    await ask('verify-history-B'); await answer('verify-history-B'); await idle();
+    disconnected = true;
+    await Promise.allSettled(sockets.splice(0).flatMap(pair => pair.map(socket => socket.close())));
+    await page.waitForFunction(() => document.querySelector('textarea').disabled && document.querySelector('main header').textContent.includes('连接中'));
+    assert.equal(page.url(), bUrl);
+    disconnected = false;
+    await idle(); await answer('verify-history-B');
+    await ask('after-reconnect'); await answer('after-reconnect'); await idle();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: '会话历史', exact: true }).click();
+    await select('history-A'); await idle();
+    assert.equal(await page.getByRole('button', { name: '会话历史', exact: true }).getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // Generate durable history through the real agent loop, beyond the initial window.
+    for (let i = 0; i < 30; i++) {
+      await ask(`page-${i}`); await answer(`page-${i}`); await idle();
+    }
+    await page.reload(); await answer('page-29'); await idle();
+    const before = await page.locator('.user').count();
+    const older = page.getByRole('button', { name: '加载更早消息', exact: true });
+    await older.waitFor();
+    await page.locator('.banso-messages').evaluate(node => { node.scrollTop = 0; });
+    const anchor = page.locator('.user').first();
+    const anchorText = await anchor.innerText();
+    const y = (await anchor.boundingBox()).y;
+    await older.click();
+    await page.waitForFunction(count => document.querySelectorAll('.user').length > count, before);
+    const retained = page.locator('.user').filter({ hasText: anchorText.replace(/^你\n/, '') }).first();
+    assert.ok(Math.abs((await retained.boundingBox()).y - y) < 5, 'prepend preserves viewport anchor');
+    assert.equal(await page.locator('.user').count(), 33);
+    const userTexts = await page.locator('.user').allTextContents();
+    assert.equal(new Set(userTexts).size, userTexts.length);
+    // The one restart checks both conversation history and an explicitly renamed title.
+    await page.locator('.banso-session-row').filter({ hasText: 'history-A' }).hover();
+    await page.getByRole('button', { name: '会话操作 history-A', exact: true }).click();
+    await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+    await page.getByRole('textbox', { name: '会话名称', exact: true }).fill('历史研究');
+    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.getByRole('button', { name: '会话操作 历史研究', exact: true }).waitFor();
+    const saved = new URL(page.url()).searchParams.get('session');
+    await host.stop();
+    host = await startHost(env);
+    // The upstream launch-token exchange redirects to ./ and removes all query parameters.
+    await page.goto(host.url); await idle();
+    await page.getByRole('button', { name: '会话操作 历史研究', exact: true }).waitFor();
+    const restored = new URL(page.url()); restored.searchParams.set('session', saved);
+    await page.goto(restored.href); await answer('page-29'); await idle();
+    await select('history-B'); await answer('verify-history-B'); await idle();
+    await ask('verify-history-B'); await idle();
+    await page.waitForFunction(() => [...document.querySelectorAll('.assistant')].filter(node => node.textContent.includes('回答：verify-history-B')).length === 2);
+    // Invalid identities stay in the URL and cannot send into a replacement session.
+    const invalid = new URL(page.url()); invalid.searchParams.set('session', 'missing-session');
+    await page.goto(invalid.href);
+    await page.getByRole('button', { name: '重试打开', exact: true }).waitFor();
+    assert.equal(new URL(page.url()).searchParams.get('session'), 'missing-session');
+    assert.equal(await page.getByLabel('你的问题').isDisabled(), true);
+    await page.getByRole('button', { name: '重试打开', exact: true }).click();
+    await page.getByRole('button', { name: '重试打开', exact: true }).waitFor();
+    await newChat(); await idle();
+    await ask('title-error'); await answer('title-error'); await idle();
+    await page.getByRole('alert').filter({ hasText: '标题保存失败' }).waitFor();
+    assert.equal(await page.locator('.user').count(), 1);
+    // A new conversation still works following all recovery paths.
+    await newChat(); await ask('after-errors'); await answer('after-errors'); await idle();
+    assert.deepEqual(errors, []);
+  } catch (failure) {
+    throw new Error(`${failure}\nBrowser: ${await page.locator('body').innerText()}\nHost: ${host.output()}`);
+  }
+});
+
+test('rename menu: cancel, validation, failure, continuation and refresh', { timeout: 90000 }, async t => {
+  const { env } = await fixture(t);
+  const host = await startHost(env);
+  const browser = await chromium.launch({ headless: true, ...(process.env.BANSO_TEST_CHROMIUM ? { executablePath: process.env.BANSO_TEST_CHROMIUM } : {}) });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const idle = () => page.waitForFunction(() => !document.querySelector('textarea').disabled);
+  const ask = async text => {
+    await idle(); await page.getByLabel('你的问题').fill(text);
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await page.locator('.assistant').filter({ hasText: `回答：${text}` }).waitFor(); await idle();
+  };
+  const row = title => page.locator('.banso-session-row').filter({ has: page.locator('.banso-session span', { hasText: new RegExp(`^${title}$`) }) });
+  const edit = async title => {
+    await row(title).hover();
+    await page.getByRole('button', { name: `会话操作 ${title}`, exact: true }).click();
+    await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+  };
+  const save = () => page.getByRole('button', { name: '保存', exact: true }).click();
+  await page.goto(host.url);
+  try {
+    await ask('rename-A');
+    await page.getByRole('button', { name: '新会话', exact: true }).click();
+    await ask('rename-B');
+    const bUrl = page.url();
+    const more = page.getByRole('button', { name: '会话操作 rename-A', exact: true });
+    await page.getByLabel('你的问题').hover();
+    assert.equal(await more.evaluate(node => getComputedStyle(node).opacity), '0');
+    await row('rename-A').hover();
+    await more.click();
+    await page.getByRole('menu', { name: '会话操作', exact: true }).waitFor();
+    assert.equal(await more.getAttribute('aria-expanded'), 'true');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.getByRole('menu').count(), 0);
+    assert.equal(await more.evaluate(node => node === document.activeElement), true);
+    await page.keyboard.press('Enter');
+    await page.getByRole('menu').waitFor();
+    await page.getByLabel('你的问题').click();
+    assert.equal(await page.getByRole('menu').count(), 0);
+    assert.equal(page.url(), bUrl);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: '会话历史', exact: true }).click();
+    await edit('rename-A');
+    const input = page.getByRole('textbox', { name: '会话名称', exact: true });
+    assert.equal(await input.inputValue(), 'rename-A');
+    await input.fill('   ');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    assert.equal(await page.getByRole('button', { name: '保存', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await row('rename-A').waitFor();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await edit('rename-A'); await input.fill('未保存的名称'); await input.press('Escape');
+    assert.equal(await input.count(), 0);
+    await edit('rename-A'); await input.fill('title-error'); await save();
+    await row('rename-A').getByRole('alert').filter({ hasText: 'fixture title failure' }).waitFor();
+    const title = '研究：中文 😀';
+    await input.fill(title);
+    await input.dispatchEvent('compositionstart');
+    await input.press('Enter');
+    assert.equal(await input.count(), 1, 'IME confirmation must not submit');
+    await input.dispatchEvent('compositionend');
+    await input.press('Enter');
+    await row(title).waitFor();
+    await page.waitForFunction(() => !document.querySelector('.banso-rename-form'));
+    assert.equal(page.url(), bUrl, 'renaming another session keeps the current selection');
+    assert.equal(await page.locator('.user').count(), 1);
+    assert.match(await page.locator('.user').innerText(), /rename-B/);
+    await row(title).locator('.banso-session').click();
+    await ask('rename-follow-up');
+    await row(title).waitFor();
+    const aUrl = page.url();
+    await page.reload(); await page.locator('.assistant').filter({ hasText: '回答：rename-follow-up' }).waitFor(); await idle();
+    await row(title).waitFor();
+    assert.equal(page.url(), aUrl);
+    const touch = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    await touch.goto(host.url);
+    await touch.getByRole('button', { name: '会话历史', exact: true }).tap();
+    const touchMore = touch.getByRole('button', { name: `会话操作 ${title}`, exact: true });
+    await touchMore.waitFor();
+    assert.equal(await touchMore.evaluate(node => getComputedStyle(node).opacity), '1');
+    await touchMore.tap();
+    await touch.getByRole('menuitem', { name: '重命名', exact: true }).tap();
+    assert.equal(await touch.getByRole('textbox', { name: '会话名称', exact: true }).inputValue(), title);
+    await touch.getByRole('button', { name: '取消', exact: true }).tap();
+    assert.equal(await touch.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await touch.close();
+    assert.deepEqual(errors, []);
+  } catch (failure) {
+    throw new Error(`${failure}\nBrowser: ${await page.locator('body').innerText()}\nHost: ${host.output()}`);
+  }
 });

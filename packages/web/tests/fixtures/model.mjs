@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { addAbortListener } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 // Reuse the existing integration-test dependency without changing banso's manifest.
@@ -6,6 +7,8 @@ const require = createRequire(new URL('../../../banso/package.json', import.meta
 const { LlmAdapter } = await import(require.resolve('@deepseek-ai/dsh-llm'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 class Model extends LlmAdapter {
+  background = Promise.withResolvers();
+  backgroundStarted = false;
   async resolveModel(provider, model) {
     return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } };
   }
@@ -28,6 +31,26 @@ class Model extends LlmAdapter {
     assert.ok(request.tools.some(tool => tool.name === 'web_read'));
     const last = request.messages.findLast(message => message.role === 'user' && message.source.kind === 'user');
     const text = last.content.filter(block => block.type === 'text').map(block => block.text).join('');
+    // Complete A only after B reaches the model, so navigation cannot cancel A unnoticed.
+    if (text === 'history-B') {
+      assert.ok(this.backgroundStarted, 'background request reached the model before switching');
+      this.background.resolve();
+    }
+    if (text === 'background') {
+      this.backgroundStarted = true;
+      let cancellation;
+      try {
+        await new Promise((resolve, reject) => {
+          if (request.signal) cancellation = addAbortListener(request.signal, () => reject(request.signal.reason));
+          this.background.promise.then(resolve);
+        });
+      } finally { cancellation?.[Symbol.dispose](); }
+    }
+    if (text.startsWith('verify-history-')) {
+      const prior = text.replace('verify-', '');
+      assert.ok(request.messages.some(message => message.role === 'user' && message.content.some(block => block.type === 'text' && block.text === prior)), 'resumed prompt includes original question');
+      assert.ok(request.messages.some(message => message.role === 'assistant' && message.content.some(block => block.type === 'text' && block.text === `回答：${prior}`)), 'resumed prompt includes original answer');
+    }
     if (text === 'tools' || text === 'cancel-tools' || text === 'error-tools') {
       const tail = request.messages.slice(request.messages.indexOf(last) + 1);
       const results = tail.filter(message => message.role === 'tool');
@@ -83,8 +106,13 @@ class Model extends LlmAdapter {
     yield { type: 'finish', reason: { kind: 'stop' } };
   }
 }
-export const inject = ['llm', 'web'];
+export const inject = ['llm', 'web', 'sessionTitle', 'sessions'];
 export function apply(ctx) {
+  const rename = ctx.sessionTitle.rename.bind(ctx.sessionTitle);
+  ctx.sessionTitle.rename = (session, title) => {
+    if (title === 'title-error') throw new Error('fixture title failure');
+    return rename(session, title);
+  };
   ctx.llm.registerAdapter(['mock'], new Model());
   ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search(_, signal) {
     await delay(900, undefined, { signal });

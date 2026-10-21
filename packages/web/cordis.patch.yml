@@ -41,6 +41,12 @@
       name: "@deepseek-ai/dsh-api-remote-access"
     - id: api-remotes
       name: "@deepseek-ai/dsh-api-remotes"
+    - id: session-title
+      name: "@deepseek-ai/dsh-session-title"
+      config:
+        fallbackMaxWords: 30
+        fallbackMaxBytes: 120
+        maxTitleBytes: 128
     - id: api-session-controller
       name: "@deepseek-ai/dsh-api-session-controller"
       config:
