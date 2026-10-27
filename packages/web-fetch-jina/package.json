@@ -24,6 +24,9 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
   "type": "module",
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.5"
@@ -37,7 +40,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.5",
-    "@deepseek-ai/dsh-launch-environment": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-web": "0.2.1-rc.2"
+    "@deepseek-ai/dsh-launch-environment": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-web": ">=0.2.1-rc.2 <0.3.0-0"
   }
 }

@@ -4,6 +4,9 @@
   "description": "Minimal standalone SDK runtime bundle for Banso DSH",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
   "files": [
     "LICENSE",
     "cordis.patch.yml",
@@ -19,21 +22,21 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-agent-loop": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-fs-local": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-llm-deepseek-api-key": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-llm-retry": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-sdk-app": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-sdk-jsonrpc-server": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-session-projection": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-session-title": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-working-directory": "0.2.1-rc.2"
+    "@deepseek-ai/dsh-agent": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-agent-loop": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-fs-local": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-llm-deepseek-api-key": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-llm-retry": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-sdk-app": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-sdk-jsonrpc-server": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-session": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-session-persistence-jsonl": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-session-projection": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-session-title": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.1-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-working-directory": ">=0.2.1-rc.2 <0.3.0-0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.5"

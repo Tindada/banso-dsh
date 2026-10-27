@@ -1,6 +1,6 @@
 # Banso preset
 
-`banso-dsh-preset` 向现有官方 DSH Web profile 增加 `banso` preset，适配 DSH `0.2.1-rc.2`。它只组合已有插件，不包含独立应用、base 或 Web；宿主提供模型、默认 loop、会话存储和工具超时策略。
+`banso-dsh-preset` 向现有官方 DSH Web profile 增加 `banso` preset，声明 DSH 兼容范围 `>=0.2.1-rc.2 <0.3.0-0`，开发与实际验证基线为 `0.2.1-rc.2`，其他版本尚未验证。它只组合已有插件，不包含独立应用、base 或 Web；宿主提供模型、默认 loop、会话存储和工具超时策略。
 
 ## 从源码加载
 

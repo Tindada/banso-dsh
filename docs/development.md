@@ -18,6 +18,8 @@ pnpm build
 
 构建编译功能插件和 UI，并由 banso 的构建脚本从 base 复制 `base.patch.yml`、生成第三方许可声明。基础配置只修改 `packages/base/cordis.patch.yml`；复制产物不手工维护。修改源码后重新构建，修改 patch 后重启；修改基础 patch 时还需重新构建入口包。
 
+各包通过 `engines.dsh` 声明兼容范围 `>=0.2.1-rc.2 <0.3.0-0`，DSH 运行时依赖和 peers 使用相同范围；根 CLI、开发依赖和当前锁文件仍固定在 `0.2.1-rc.2`。preset 使用宿主 DSH peers，完整 bundle 保留所组合插件的普通依赖。范围声明不代表 rc.3 等其他版本已经验证。
+
 调试 SDK 组合时，用源码链接创建 profile。将示例中的绝对路径替换为本仓库路径；安装、配置检查和 SDK 启动应使用同一个 `DSH_HOME`：
 
 ```sh
