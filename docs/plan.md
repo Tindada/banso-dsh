@@ -6,6 +6,8 @@
 
 ## 当前能力
 
+2026-10-27，源码 Banso 改为固定依赖 npm `banso-dsh-materials@0.1.2`，不再使用 workspace 链接。materials 源码与单元测试已迁出并从本仓库删除，后续在独立项目维护；Banso 保留消费 npm 包的组合回归测试。npm 0.1.2 的 DSH peer 仍精确要求 `0.2.1-rc.2`，独立项目中的宽范围声明不影响已发布包，也不代表 rc.3 已兼容。
+
 依赖已升级至 DSH `0.2.1-rc.2`、Cordis `4.0.5`（2026-10-17）。类型检查、构建及 74 项测试通过；Python SDK `0.1.5rc1` 和 Web 真实在线调用验证通过，Web 页面显示正常。已移除 invariant 组合，base 增加文件系统与工作目录服务，Web 增加 remote-access 并复用 base 文件系统。下文历史验证保留当时的版本记录。项目使用 pnpm workspace：
 
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
@@ -17,7 +19,7 @@
 
 `stateVersion` 为 `2`，材料逐条记录 displayMode，同一 session 可切换或混合阅读方式。不支持旧 web_fetch 或无 mode 的 web_read 日志恢复；升级后使用新会话。首版没有刷新／过期、证据去重／合并、长文分块、上下文总量控制、长期资料库或引用语义校验。
 
-协议与行为详见 [网页工具与资料插件](../packages/materials/README.md) 和 [提示词插件](../packages/prompt/README.md)。
+协议与行为详见 [网页工具与资料插件](https://www.npmjs.com/package/banso-dsh-materials/v/0.1.2) 和 [提示词插件](../packages/prompt/README.md)。
 
 materials 内置 search/read 共享预算，默认每 turn 15 次，按工具调用尝试计数；工具列表过滤和执行 guard 提供严格执行上限。预算与材料共用 projection 和快照，stateVersion 保持 2。
 

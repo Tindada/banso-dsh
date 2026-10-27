@@ -2,13 +2,15 @@
 
 本组合已注册 `banso-materials`。`banso-dsh-materials` 的独立 bundle 用于其他 DSH profile；不要在启用本组合的同一 profile 中额外启用它或再次插入 materials 注册项。
 
+materials 作为外部 npm 依赖安装，当前固定使用 `banso-dsh-materials@0.1.2`；安装本组合会自动获取它。
+
 `banso-dsh` 组合精简 SDK 基础环境、DeepSeek Search API 搜索、Jina Reader 抓取和 [Banso 提示词插件](https://github.com/Tindada/banso-dsh/blob/main/packages/prompt/README.md)，向 agent 提供 `web_search`、`web_read`、材料隐藏和每轮固定的 UTC 参考时间。业务 profile 只加载本包；基础配置已包含在内，不要再同时加载 `banso-dsh-base`。
 
 本包在配置中直接将 persona 设为新闻研究助手，并开启 runtime context；当前通过 `researchPrompt: ""` 关闭研究规则。参考时间自动取自服务器；指定历史日期或研究范围直接写在用户消息中。
 
 本包由 Banso 项目独立维护，非 DeepSeek 官方发行包。随包分发的 `base.patch.yml` 改编自 DSH 的 `sdk-minimal` 配置，遵循 MIT；构建和打包时同步生成的 `THIRD_PARTY_NOTICES.md` 保留其完整上游许可声明。
 
-[会话资料插件](https://github.com/Tindada/banso-dsh/blob/main/packages/materials/README.md) 提供阅读、材料隐藏和资料快照。组合关闭原生 fetch 工具，并加载 DSH 工具超时策略；工具协议、正文复用和证据保存行为见该插件说明。
+[会话资料插件](https://www.npmjs.com/package/banso-dsh-materials/v/0.1.2) 提供阅读、材料隐藏和资料快照。组合关闭原生 fetch 工具，并加载 DSH 工具超时策略；工具协议、正文复用和证据保存行为见该插件说明。
 
 ## 阅读模式
 

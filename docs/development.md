@@ -47,62 +47,11 @@ pnpm exec dsh --profile banso-web --dump-config
 
 ## 内部实现
 
-### Materials 注册与阅读链路
+### Materials 集成
 
-materials 包通过 `dsh.bundle.patch` 暴露单插件加载层，用于标准 Web 等外部 profile；Banso 仍由自己的 patch 注册同一个插件，两种入口不在同一 profile 叠加。`tests/bundle.test.mjs` 将编译产物打成 tarball 后解包，用已安装 DSH CLI 的 `--dump-config` 验证标准 Web 与 Banso 的配置各含一个 materials 注册项；这不等于浏览器端到端验证。测试依赖本机 `npm` 与 `tar`，打包跳过生命周期脚本，编译由包测试脚本先完成。
+Banso 从 npm 安装 `banso-dsh-materials@0.1.2`，由自己的 patch 注册插件，不额外启用 materials 独立 bundle。本仓库不维护 materials 源码、构建或单元测试；插件协议和配置见 [npm 包说明](https://www.npmjs.com/package/banso-dsh-materials/v/0.1.2)。
 
-以下文件路径相对于 `packages/materials/src/`。工具执行只读取资料状态，更新通过工具结果事件提交：
-
-| 环节 | 源码入口与依赖接口 | 职责 |
-| --- | --- | --- |
-| 注册 | `index.ts`：`ctx.sessionProjections.register()`、`ctx.tools.register()` | 注册资料和快照投影、隐藏工具，以及统一的 `web_read` 工具 |
-| 搜索包装 | `tools/search.ts` | 包装 agent 当前可见的搜索工具，保留参数、执行逻辑和 metadata，将模型回执改为简短输出 |
-| fetch 禁用 | `tools/fetch-policy.ts`：`system-prompt/assemble`、`ctx.tools.guard()` | 从模型工具列表过滤 `web_fetch` 并拒绝同名执行，保留底层抓取服务；随插件卸载撤销 |
-| 正文获取 | `tools/page.ts`：`ctx.web.fetch()`、`formatFetchOutput(result, Infinity)` | 解析 handle、复用正文，或调用 provider 并格式化正文；保留 provider 截断 |
-| 证据提取 | `extraction/extract.ts`：`ctx.llm.stream()`、`BlockAssembler` | 单次无工具调用；输入 focus、标题和正文，解析含 `text` 字段的 JSON，保存证据和用量 |
-| 结果提交 | `tools/read.ts`、`tools/hide.ts` | 返回短回执与 metadata，由框架提交工具结果事件 |
-| 状态更新 | `state/projection.ts` | 从事件维护 `bansoMaterials`，不从短回执猜测内容 |
-| 上下文注入 | `context/context.ts`、`state/snapshot.ts` | 渲染资料，跟踪并替换旧快照 |
-
-`web_read` 的必填 `mode` 决定每次阅读方式，材料的 `displayMode` 决定快照展示；不读取全局模式配置。提取模型路由使用成对覆盖的 provider/model，否则读取 `session.requestHeader()?.config`；推理固定为 `off`。抓取与提取均传递取消信号。公共配置、资料类型及只读访问方式见 [包 README](../packages/materials/README.md)。
-
-### Materials 工具日志协议
-
-search 沿用原生 metadata；web_read 的执行结果作为 metadata 保存。正文和证据经投影进入快照，耗时和 token 用量只保存在日志中。
-
-| 字段 | extract | direct | 保存规则 |
-| --- | --- | --- | --- |
-| `mode` | extract | direct | 本次阅读方式 |
-| `requestUrl` | 有 | 有 | 请求地址 |
-| `focus` | 有 | 无 | 本次提取目标 |
-| `content`、`finalUrl`、`truncated` | 可选 | 可选 | 仅本次成功抓取时提供；复用正文时省略 |
-| `evidence` | 可选 | 无 | 提取完成时提供，空字符串表示无相关证据 |
-| `error` | 可选 | 可选 | 阶段失败原因；HTTP 非 2xx 错误包含状态码 |
-| `fetchMs` | 可选 | 可选 | 抓取及格式化耗时，单位毫秒；复用时省略 |
-| `extractMs` | 可选 | 无 | 提取耗时，单位毫秒；未进入提取时省略 |
-| `usage` | 可选 | 无 | 模型实际报告的 token 用量，不估算 |
-
-不维护单独的抓取／提取状态枚举。抓取失败不调用提取器；抓取成功后提取失败仍可提交正文和诊断。未知 handle、非法参数、缺少 agent／投影按普通工具错误处理。整体取消和超时不提交阶段 metadata，因此不保证保存本次尚未入库的内容。原生 DSH fetch 的结果不作为本插件协议使用。
-
-### Materials 投影更新与恢复
-
-`pendingCalls` 通过事件 seq、callId、turn 关联调用和结果。仅原始追加且 metadata 有效的结果更新资料；处理后删除 pending，turn 结束清理残留。隐藏工具默认独占调度，正常提交的 `tool/result` 驱动 `hidden: true`，不直接改写资料或消息。
-
-抓取阶段失败可按请求 URL 创建条目；普通工具错误或整体取消没有有效 metadata 时不更新资料。正文和证据时间取自各自入库的结果事件，复用正文不更新时间或重复记录全文。
-
-资料投影纯同步，不访问网络或时钟，支持 JSONL 重放、后加载和卸载重载。`stateVersion` 为 `2`，通过日志重建材料及逐条 `displayMode`。只解析带 mode 的 web_read 结果，不支持旧阅读日志恢复；升级后使用新会话。成功结果更新展示模式，失败保留原模式；并发阅读以结果事件顺序为准。
-
-### Materials 快照与提示词
-
-`context/context.ts` 的 `agent/pre-step` 中间件先等待后续检查结果，仅在允许进入 step 时读取投影并注入快照。`renderMaterials(state)` 负责渲染，展示规则见 [资料展示](../packages/materials/README.md#资料展示)。
-
-快照内容不变时复用；变化时用短占位替换旧快照，再追加新快照。消息 source 为 `{ kind: 'banso-materials', form: 'snapshot' | 'placeholder' }`。全部材料隐藏时生成空快照，从未收集材料时不插入。`bansoMaterialsSnapshot` 保存最新快照的 `{ messageId, seq }` 或 `null`；发现快照被外部覆盖时，下步重新插入。包入口导出对应的 `MaterialsSnapshotState` 类型。卸载停止后续更新，不撤销已写入消息。
-
-`context/guidance.ts` 使用 `ctx.systemPrompt.section()` 注册 `Materials snapshot:` 公共声明和工具指引，通过 `system-prompt/assemble` 中间件置空原生搜索和 fetch 指引；read/hide 的工具指引随作用域可见性生效。search 不重复添加系统指引；原生 `tool:web_search` 文本置空，快照语义由搜索 description 补充。卸载恢复原生描述与指引，并移除本插件声明。提取模型使用独立提示词，不受这些主 agent 指引影响。
-
-### Materials 研究预算实现
-
-`budget.ts` 在 `system-prompt/assemble` 过滤额度耗尽的 search/read，并通过 `ctx.tools.guard()` 拒绝超额执行。默认 loop 先写入 `tool/call`，再按顺序执行前置检查，最后并发执行工具，因此 guard 判断已经包含当前调用的 `used <= researchBudget`。每个 `turn/start` 重置用量；计数复用 materials projection，`stateVersion` 保持 `2`，不新增日志事件。完整日志重放可以重建预算，旧 projection 缓存缺少预算字段时不能作为零用量使用。
+`packages/banso/tests/research.test.mjs` 通过包名导入已安装的 npm 包，覆盖默认 loop、工具 metadata、资料快照、共享研究预算、正文复用、两种阅读模式与 JSONL 恢复。组合关闭原生 fetch 工具并加载 DSH 工具超时策略，网页 provider、模型和凭据仍由 Banso 组合提供。测试使用模拟模型及 provider，Jina 集成使用本地 HTTP 服务，不代表真实在线服务已经验证。
 
 ### 提示词与参考时间
 
@@ -131,7 +80,6 @@ TypeScript 和 esbuild 生成 DSH `__ModuleLoader__.load` 工厂，React 使用�
 | 范围 | 命令 | 主要覆盖 |
 | --- | --- | --- |
 | Banso 组合 | `pnpm --filter banso-dsh test` | 真实插件、默认 loop、JSONL 恢复；handle、并发读取、正文复用、两种阅读模式及参考时间；真实 Jina provider 对接本地 HTTP 服务 |
-| Materials | `pnpm --filter banso-dsh-materials test` | 共享研究预算（计数、工具过滤、guard、跨 turn 重置、隔离与卸载）、工具注册与卸载、投影重放、快照替换、隐藏恢复、预算与错误／取消／超时；direct 不调用提取模型 |
 | Prompt | `pnpm --filter banso-dsh-prompt test` | 真实 loop、模拟 LLM 与可控时钟；同轮固定、跨轮更新、agent 隔离及重载 |
 | Jina | `pnpm --filter banso-dsh-web-fetch-jina test` | 本地 HTTP 服务验证请求、响应、错误、截断、取消及生命周期 |
 | UI | `pnpm --filter banso-dsh-ui test` | 消息与工具状态投影、URL、标题及相对时间 |

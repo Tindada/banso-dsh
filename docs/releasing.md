@@ -26,19 +26,20 @@ pnpm build
 - TypeScript 包的 `prepack` 会清理并重建 `lib/`，打包会执行这些生命周期脚本。
 - `banso` 的 build/prepack 从 `banso-dsh-base` 复制基础 patch，并根据其 LICENSE 生成 `THIRD_PARTY_NOTICES.md`。应维护基础包许可和生成脚本，不直接修改生成文件。
 - `base` 是纯配置包；`web` 分发 `src` 和 patch；`ui` 分发构建后的客户端产物。
+- materials 已迁为外部 npm 依赖，本仓库不再构建、打包或发布它；发布 Banso 时核对其 materials 版本和组合测试结果。
 
 在仓库根目录执行以下命令，将产物保存到仓库外的临时目录，再逐包打包：
 
 ```sh
 mkdir -p /tmp/banso-dsh-release
-pnpm --dir packages/materials pack --pack-destination /tmp/banso-dsh-release
+pnpm --dir packages/banso pack --pack-destination /tmp/banso-dsh-release
 ```
 
 对本次发布的其他包重复执行，并检查生成 tarball 的内容：
 
 ```sh
-tar -tzf /tmp/banso-dsh-release/banso-dsh-materials-0.1.2.tgz
-tar -xOf /tmp/banso-dsh-release/banso-dsh-materials-0.1.2.tgz package/package.json
+tar -tzf /tmp/banso-dsh-release/banso-dsh-0.1.1.tgz
+tar -xOf /tmp/banso-dsh-release/banso-dsh-0.1.1.tgz package/package.json
 ```
 
 示例文件名来自当前源码版本，实际检查使用命令输出的文件名。检查包内 `package.json` 的版本、入口及依赖，确认没有残留的 `workspace:` 或本地链接。核对：入口和类型文件可用，生成 patch 完整，README、许可证和第三方声明齐备，没有密钥、测试截图或本地运行数据；包内相对链接能在解压目录中解析。跨仓库链接需另行检查。
