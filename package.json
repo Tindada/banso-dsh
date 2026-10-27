@@ -8,7 +8,7 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "dsh": "DSH_HOME=\"$PWD/.dsh\" dsh",
-    "dev": "pnpm run dsh --profile banso-web"
+    "dev": "pnpm run dsh --profile web"
   },
   "keywords": [],
   "author": "",

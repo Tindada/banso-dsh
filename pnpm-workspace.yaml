@@ -323,11 +323,3 @@ packageExtensions:
   '@deepseek-ai/dsh-llm@0.2.1-rc.2':
     dependencies:
       '@deepseek-ai/dsh-attachment': '0.2.1-rc.2'
-  # Public snapshot/slot declarations import client-store, but the published
-  # packages list it only as a development dependency.
-  '@deepseek-ai/dsh-api-session-controller@0.2.1-rc.2':
-    dependencies:
-      '@deepseek-ai/dsh-client-store': '0.2.1-rc.2'
-  '@deepseek-ai/dsh-client-ui-slots@0.2.1-rc.2':
-    dependencies:
-      '@deepseek-ai/dsh-client-store': '0.2.1-rc.2'

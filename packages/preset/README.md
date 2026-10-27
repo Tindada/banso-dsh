@@ -9,11 +9,11 @@
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
-pnpm exec dsh plugin --profile web add "link:$PWD/packages/preset"
-pnpm exec dsh --profile web
+pnpm run dsh plugin --profile web add "link:$PWD/packages/preset"
+pnpm dev
 ```
 
-自定义官方 profile 请替换 `web`；安装和启动使用同一个 `DSH_HOME`。安装会追加本 bundle，保留已有 presets 和默认选择。重启后，在新任务中选择 **Banso**；已开始的任务不能切换 preset。
+以上命令使用仓库内 `.dsh`。加载到已有外部 profile 时，改用 `pnpm exec dsh plugin --profile <名称> add "link:$PWD/packages/preset"` 和 `pnpm exec dsh --profile <名称>`，安装和启动保持同一个 `DSH_HOME`。安装会追加本 bundle，保留已有 presets 和默认选择。重启后，在新任务中选择 **Banso**；已开始的任务不能切换 preset。
 
 不需要加载 `banso-dsh` 完整组合，也不要额外启用 materials 独立 bundle。本包尚未发布 npm；已发布包不随源码修改而改变。
 

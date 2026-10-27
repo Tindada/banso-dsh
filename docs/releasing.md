@@ -25,7 +25,7 @@ pnpm build
 
 - TypeScript 包的 `prepack` 会清理并重建 `lib/`，打包会执行这些生命周期脚本。
 - `banso` 的 build/prepack 从 `banso-dsh-base` 复制基础 patch，并根据其 LICENSE 生成 `THIRD_PARTY_NOTICES.md`。应维护基础包许可和生成脚本，不直接修改生成文件。
-- `base` 是纯配置包；`web` 分发 `src` 和 patch；`ui` 分发构建后的客户端产物。
+- `base`、`preset` 是纯配置包；原自建 Web/UI 已移除，不再参与构建或发布。
 - 发布到 npm 时，先发布 materials，再发布依赖该版本的 Banso；本地开发使用 workspace 链接。
 
 在仓库根目录执行以下命令，将产物保存到仓库外的临时目录，再逐包打包：
@@ -58,7 +58,7 @@ tar -xOf /tmp/banso-dsh-release/banso-dsh-0.1.1.tgz package/package.json
 
 安装、审批、配置和启动必须使用同一个 `DSH_HOME`。Python 测试脚本显式设置的 `dsh_home` 应指向该目录，不能继续引用旧验证环境。
 
-准备发布时逐包确认 npm 身份、目标版本、registry 和 dist-tag，按依赖顺序发布。使用已完成验证的 tarball 发布；若重新打包，需重新检查产物。发布后，再从 npm 在独立目录仅安装入口包，确认依赖能够自动获取。Web/UI 只有完成自己的发布与安装验证后，才能将源码启动说明改为 npm 安装说明。
+准备发布时逐包确认 npm 身份、目标版本、registry 和 dist-tag，按依赖顺序发布。使用已完成验证的 tarball 发布；若重新打包，需重新检查产物。发布后，再从 npm 在独立目录仅安装入口包，确认依赖能够自动获取。preset 完成发布与独立安装验证前，官方 Web 保留源码加载说明。
 
 发布后的验证使用新的工作目录和 DSH home，不复制旧 profile 或 overrides，按根 README 从 npm 安装固定版本的入口包，再验证 SDK 和 Web。密钥配置可以复用，安装依赖与 profile 配置应重新创建。
 

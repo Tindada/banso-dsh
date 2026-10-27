@@ -8,7 +8,7 @@
 
 2026-10-27，materials 从独立仓库提交 `0619a28` 迁回 `packages/materials/`，版本保留 `0.1.3`，包含来源引用规则和搜索包装作用域修复。Banso 使用 `workspace:*` 依赖；materials 继续作为独立 npm 包和 bundle 维护。
 
-依赖已升级至 DSH `0.2.1-rc.2`、Cordis `4.0.5`（2026-10-17）。类型检查、构建及 74 项测试通过；Python SDK `0.1.5rc1` 和 Web 真实在线调用验证通过，Web 页面显示正常。已移除 invariant 组合，base 增加文件系统与工作目录服务，Web 增加 remote-access 并复用 base 文件系统。下文历史验证保留当时的版本记录。项目使用 pnpm workspace：
+开发基线为 DSH `0.2.1-rc.2`、Cordis `4.0.5`，对外兼容范围为 `>=0.2.1-rc.2 <0.3.0-0`。自建 Web/UI 已停止维护并从源码删除，Web 改用官方界面与 [Banso preset](../packages/preset/README.md)；SDK 入口保留。旧 profile 和会话文件不删除，也不自动迁移。下文保留历史验证与发布记录。项目使用 pnpm workspace：
 
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
 - 搜索默认使用官方 `deepseek-search-api`，保留 `web-search-tavily` 作为可选 provider；网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，可通过 `fetchProvider: deepseek-fetch-api` 切换到 DeepSeek Fetch。
@@ -49,27 +49,11 @@ materials 自动禁用原生 `web_fetch` 后，包内类型检查、编译和 46
 
 [BansoAgain 原实现梳理](banso-original.md) 已完成源码对照，区分代码约束、提示词要求和现有局限；尚未运行原项目测试或在线评测。
 
-## 最小 Web 聊天
+## 自建 Web 历史
 
-2026-10-15 新增 `web`、`ui` 两个包（当时尚未发布）。`banso-web` profile 按顺序加载 `banso-dsh` 和 `banso-dsh-web`，由后者停用 SDK 启动和 stdio 插件，追加官方通信、会话接口及依赖；`base/`、`banso/` 源码不变。复用已发布 DSH 的静态启动壳、renderer、ui-session 作用域适配及浏览器会话对象层，自定义根页面提供纯文本聊天、连续追问、流式回答、停止和错误提示。
+2026-10-15 至 2026-10-21，曾维护 `banso-dsh-web` 和 `banso-dsh-ui`，实现聊天、工具展示、Markdown/KaTeX、会话历史与重命名。最后一轮 UI 18 项、Web 6 项回归在模拟服务和 Chromium 下通过；既有发布及在线验证见下方记录。
 
-Web patch 默认选择官方 `deepseek-search-api` 搜索，搜索超时为 60 秒；阅读仍为 Jina，原 SDK 组合的 Tavily 默认值不变。2026-10-17 随 DSH `0.2.1-rc.2` 切换到独立 Search API，直接保留返回的 `snippet`；上游 provider 尚未保留 `summary`。2026-10-18 将 `dsh-web-deepseek-api` 依赖和注册统一移至 `banso-dsh`，SDK 可通过 profile 选择它，Web 继承注册并覆盖默认选择。
-
-初版不提供历史列表、刷新恢复或资料面板，会话 ID 只存在页面内存，刷新后首次发送创建新会话；服务端 JSONL 持久化继续保留。刷新/关闭页面不等同于停止任务。
-
-新增验证：消息投影单元测试、真实 DSH CLI + 临时 profile/home + 无头 Chromium 的聊天链路，以及 `--help` 不绑定端口。浏览器测试使用模拟模型，通过真实 HTTP/WebSocket、会话接口和默认 agent loop 验证流式回答、追问、取消、错误后继续聊天和刷新新建；模拟模型还检查 Banso 提示词及研究工具已加载。workspace 构建和类型检查、原有三项 Banso 组合回归测试通过。本机浏览器验证使用已有 Chromium 1208；当时未验证真实在线模型/搜索服务或全新机器安装；后续在线验证见下方发布状态。
-
-安装和启动见 [Web 聊天](install-npm.md#web-聊天npm-安装)，源码构建和测试见 [开发文档](development.md#web-开发与调试)，使用边界见 [Web 说明](../packages/web/README.md)。
-
-Web 聊天已增加逐次搜索、阅读状态及可折叠详情，复用官方会话工具事件；执行期间显示并行调用及结果，本轮完成、失败或停止后隐藏；模型的工具调用说明仅临时显示，回答保留。不增加后端接口。
-
-2026-10-18 模型回答增加 Markdown + GFM 与 KaTeX 公式渲染，支持 `$...$`、多行 `$$`、`\(...\)`、`\[...\]` 及独占一行的 `$$公式$$`。公式样式和字体随前端打包，用户消息与工具详情保留纯文本，原始 HTML 被忽略，长公式、表格和代码块可横向滚动。美元金额建议转义。
-
-测试围绕业务与集成边界：UI 覆盖消息过滤、流式去重、工具状态与生命周期，以及公式分隔符、代码保护和未闭合片段；Web 经真实 DSH CLI / HTTP / WebSocket 验证聊天、取消、错误恢复、刷新新会话，以及 Markdown / KaTeX 接入、HTML 隔离、字体加载和窄屏布局。完整麦克斯韦夹具已删除，独立公式回归由短用例覆盖；不逐项验证第三方 Markdown 库的基础语法，不生成例行截图，仅流式和取消场景保留模拟逐字延迟。浏览器使用模拟模型，不调用在线服务。
-
-2026-10-21 增加历史会话列表、新建与切换、刷新及浏览器前进后退恢复、历史分页和重命名，复用 DSH 会话接口与 JSONL。当前会话由 URL `session` 参数记录，切换不停止后台任务。首条问题生成截断标题，手动名称持久保留；Web 加载标题服务，不额外调用模型。侧栏使用单行标题和相对时间，重命名收进“…”菜单，触屏保留操作入口。
-
-workspace 类型检查与构建、UI 18 项及 Web 6 项测试通过，覆盖续聊历史、刷新／重连／重启恢复、分页与滚动位置、重命名和操作菜单，并保留原有聊天回归。浏览器使用本机 Chromium 1248 和模拟模型，不调用在线服务；已检查页面截图，未验证全新机器或旧材料协议迁移。
+2026-10-27 删除这两个源码包和仅验证自建页面的测试，开发入口改为官方 Web profile。历史实现可从 Git 记录恢复，已发布 npm 包仍保留。
 
 ## 发布状态
 
