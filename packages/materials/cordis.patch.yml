@@ -1,0 +1,4 @@
+# Standalone activation. Banso already registers this plugin in its own patch.
+- insert:
+    - id: banso-materials
+      name: banso-dsh-materials

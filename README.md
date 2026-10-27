@@ -40,6 +40,7 @@ pnpm exec dsh --profile banso-web
 - [源码开发与测试](docs/development.md)
 - [打包与发布](docs/releasing.md)
 - [入口包配置与行为](packages/banso/README.md)
+- [Materials 插件](packages/materials/README.md)
 - [GISA 测评](evaluation/README.md)
 - [项目规划与验证范围](docs/plan.md)
 

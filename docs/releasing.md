@@ -26,7 +26,7 @@ pnpm build
 - TypeScript 包的 `prepack` 会清理并重建 `lib/`，打包会执行这些生命周期脚本。
 - `banso` 的 build/prepack 从 `banso-dsh-base` 复制基础 patch，并根据其 LICENSE 生成 `THIRD_PARTY_NOTICES.md`。应维护基础包许可和生成脚本，不直接修改生成文件。
 - `base` 是纯配置包；`web` 分发 `src` 和 patch；`ui` 分发构建后的客户端产物。
-- materials 已迁为外部 npm 依赖，本仓库不再构建、打包或发布它；发布 Banso 时核对其 materials 版本和组合测试结果。
+- 发布到 npm 时，先发布 materials，再发布依赖该版本的 Banso；本地开发使用 workspace 链接。
 
 在仓库根目录执行以下命令，将产物保存到仓库外的临时目录，再逐包打包：
 

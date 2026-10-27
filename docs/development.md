@@ -49,9 +49,14 @@ pnpm exec dsh --profile banso-web --dump-config
 
 ### Materials 集成
 
-Banso 从 npm 安装 `banso-dsh-materials@0.1.2`，由自己的 patch 注册插件，不额外启用 materials 独立 bundle。本仓库不维护 materials 源码、构建或单元测试；插件协议和配置见 [npm 包说明](https://www.npmjs.com/package/banso-dsh-materials/v/0.1.2)。
+Banso 通过 workspace 依赖加载 `packages/materials/`，由自己的 patch 注册插件。协议和配置见 [materials README](../packages/materials/README.md)。若要在官方 Web 中单独调试 materials，完成根目录构建后执行：
 
-`packages/banso/tests/research.test.mjs` 通过包名导入已安装的 npm 包，覆盖默认 loop、工具 metadata、资料快照、共享研究预算、正文复用、两种阅读模式与 JSONL 恢复。组合关闭原生 fetch 工具并加载 DSH 工具超时策略，网页 provider、模型和凭据仍由 Banso 组合提供。测试使用模拟模型及 provider，Jina 集成使用本地 HTTP 服务，不代表真实在线服务已经验证。
+```sh
+pnpm exec dsh plugin --profile web add "link:$PWD/packages/materials"
+pnpm exec dsh --profile web
+```
+
+Banso 组合测试导入本地 materials，沿用默认 loop 和 JSONL 后端。materials 的独立 bundle 测试检查 pnpm tarball、许可证及标准 Web 配置合成，复用已安装依赖，不执行隔离安装或启动 Web。具体测试命令见下表。
 
 ### 提示词与参考时间
 
@@ -79,6 +84,7 @@ TypeScript 和 esbuild 生成 DSH `__ModuleLoader__.load` 工厂，React 使用�
 
 | 范围 | 命令 | 主要覆盖 |
 | --- | --- | --- |
+| Materials | `pnpm --filter banso-dsh-materials test` | 资料状态重放、快照、阅读、隐藏、预算、取消与超时、搜索作用域；pnpm tarball、许可证及标准 Web 配置合成 |
 | Banso 组合 | `pnpm --filter banso-dsh test` | 真实插件、默认 loop、JSONL 恢复；handle、并发读取、正文复用、两种阅读模式及参考时间；真实 Jina provider 对接本地 HTTP 服务 |
 | Prompt | `pnpm --filter banso-dsh-prompt test` | 真实 loop、模拟 LLM 与可控时钟；同轮固定、跨轮更新、agent 隔离及重载 |
 | Jina | `pnpm --filter banso-dsh-web-fetch-jina test` | 本地 HTTP 服务验证请求、响应、错误、截断、取消及生命周期 |
