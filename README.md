@@ -41,6 +41,7 @@ pnpm exec dsh --profile banso-web
 - [打包与发布](docs/releasing.md)
 - [入口包配置与行为](packages/banso/README.md)
 - [Materials 插件](packages/materials/README.md)
+- [官方 DSH 的 Banso preset](packages/preset/README.md)
 - [GISA 测评](evaluation/README.md)
 - [项目规划与验证范围](docs/plan.md)
 
