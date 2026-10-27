@@ -15,7 +15,18 @@ pnpm dev
 
 以上命令使用仓库内 `.dsh`。加载到已有外部 profile 时，改用 `pnpm exec dsh plugin --profile <名称> add "link:$PWD/packages/preset"` 和 `pnpm exec dsh --profile <名称>`，安装和启动保持同一个 `DSH_HOME`。安装会追加本 bundle，保留已有 presets 和默认选择。重启后，在新任务中选择 **Banso**；已开始的任务不能切换 preset。
 
-不需要加载 `banso-dsh` 完整组合，也不要额外启用 materials 独立 bundle。本包尚未发布 npm；已发布包不随源码修改而改变。
+不需要加载 `banso-dsh` 完整组合，也不要额外启用 materials 独立 bundle。
+
+## 从 npm 加载
+
+在已有 DSH 环境中执行：
+
+```sh
+dsh plugin --profile web add banso-dsh-preset@0.1.0
+dsh --profile web
+```
+
+只安装 preset 即可，其依赖会自动获取；新任务中选择 **Banso**。安装和启动使用同一 `DSH_HOME`。
 
 ## 行为与配置
 

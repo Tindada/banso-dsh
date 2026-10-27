@@ -57,6 +57,8 @@ materials 自动禁用原生 `web_fetch` 后，包内类型检查、编译和 46
 
 ## 发布状态
 
+2026-10-27 已发布 `banso-dsh-preset@0.1.0`、`banso-dsh-materials@0.1.4`、`banso-dsh-prompt@0.1.2` 和 `banso-dsh-web-fetch-jina@0.1.2`。用户从 npm 安装 preset 后确认官方 Web 可以正常使用；入口包自动获取上述业务依赖。本次未发布 SDK 入口及其他包，未覆盖全新机器、所有平台或完整功能。npm 安装步骤见[安装文档](install-npm.md#官方-web)。
+
 2026-10-19 已发布 `banso-dsh-materials@0.1.2`，包含搜索作用域适配、自动禁用原生 fetch 和独立 bundle 支持。已人工验证从 npm 安装该版本，在标准 DSH Web 中搜索与直接阅读正常。其他包未随本次升版，已发布的 Banso 包不会因此自动使用新版 materials。
 
 2026-10-09 七个包已发布 `0.1.0`。本机独立目录从 npm 安装 DSH 后，仅指定入口包 `banso-dsh@0.1.0`，其余六包自动获取；完成配置合成和 Python SDK 在线验证，一次搜索返回八个来源，两次网页抓取及证据提取成功，正常结束。profile 中需单独批准 koffi 构建；missing peer 提示与 DSH 从宿主解析依赖的设计有关，本次运行未受影响。此验证不使用源码链接或 tarball，但未覆盖全新机器和完整功能。

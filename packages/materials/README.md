@@ -15,7 +15,7 @@
 在已安装 DSH 的环境中，将插件安装到已有的标准 Web profile，再启动 Web：
 
 ```sh
-dsh plugin --profile web add banso-dsh-materials@0.1.3
+dsh plugin --profile web add banso-dsh-materials@0.1.4
 dsh --profile web
 ```
 
@@ -23,7 +23,7 @@ dsh --profile web
 
 ### 从 Web UI 安装
 
-在标准 Web 的插件管理页选择“添加插件”，输入 `banso-dsh-materials@0.1.3`，完成安装后点击“立即启用”。新建会话使用插件。
+在标准 Web 的插件管理页选择“添加插件”，输入 `banso-dsh-materials@0.1.4`，完成安装后点击“立即启用”。新建会话使用插件。
 
 ### Profile 配置
 

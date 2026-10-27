@@ -1,8 +1,8 @@
 # Banso 提示词插件
 
-`banso-dsh-prompt` 为默认 DSH agent loop 提供研究规则和本轮参考时间。由 `banso-dsh` bundle 加载，依赖 `systemPrompt`、`agents` 服务。
+`banso-dsh-prompt` 为默认 DSH agent loop 提供可配置的研究规则和本轮参考时间。由 Banso SDK bundle 或 preset 加载，依赖 `systemPrompt`、`agents` 服务。
 
-- `banso:research` section：三段研究策略，分别说明如何研究、如何判断证据与结束、如何回答。涵盖时间范围、覆盖度、来源冲突、引用和输出格式；工具操作协议由 [资料插件](https://www.npmjs.com/package/banso-dsh-materials/v/0.1.2) 负责。
+- `banso:research` section：通过 `researchPrompt` 配置研究规则，当前默认正文为空；工具操作协议及材料指导由 [资料插件](https://github.com/Tindada/banso-dsh/blob/main/packages/materials/README.md) 提供。
 - `banso:reference-time` context：本轮开始处理输入时的 UTC 时间。需要 `includeRuntimeContext: true`；Banso bundle 已开启。
 
 ## 配置

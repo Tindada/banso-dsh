@@ -1,6 +1,28 @@
 # npm 安装
 
-本文记录已发布的 Python SDK 组合安装方式，使用 `banso-dsh@0.1.1`。官方 Web 使用 [Banso preset](../packages/preset/README.md)，当前需从源码加载；原自建 Web/UI 已停止维护。
+## 官方 Web
+
+准备 **Node.js 24、pnpm 和 DeepSeek API key**。在工作目录安装 DSH 和 Banso preset：
+
+```sh
+pnpm add @deepseek-ai/dsh@0.2.1-rc.2
+pnpm exec dsh plugin --profile web add banso-dsh-preset@0.1.0
+```
+
+在该目录创建 `.env`（也可复制已有配置）：
+
+```dotenv
+DEEPSEEK_API_KEY=你的DeepSeek密钥
+JINA_API_KEY=
+```
+
+`JINA_API_KEY` 可留空。启动后，在新任务中选择 **Banso** 和模型：
+
+```sh
+pnpm exec dsh --profile web
+```
+
+需要更换端口时加上 `--port 3081`。默认配置与会话保存在 `~/.dsh`；若设置了 `DSH_HOME`，安装和启动均使用该目录。配置说明见 [preset README](../packages/preset/README.md)。
 
 ## Python SDK（npm 安装）
 

@@ -28,21 +28,9 @@ pnpm build
 - `base`、`preset` 是纯配置包；原自建 Web/UI 已移除，不再参与构建或发布。
 - 发布到 npm 时，先发布 materials，再发布依赖该版本的 Banso；本地开发使用 workspace 链接。
 
-在仓库根目录执行以下命令，将产物保存到仓库外的临时目录，再逐包打包：
+使用 pnpm 将目标包打包到仓库外的临时目录，检查每个 tarball 的文件列表和 `package.json`。确认版本与依赖符合本次发布计划，没有残留的 `workspace:` 或本地链接；入口和类型文件可用，patch、README 和许可证完整，没有密钥、测试截图或本地运行数据。包内相对链接需在解压目录中检查，跨仓库链接另行检查。
 
-```sh
-mkdir -p /tmp/banso-dsh-release
-pnpm --dir packages/banso pack --pack-destination /tmp/banso-dsh-release
-```
-
-对本次发布的其他包重复执行，并检查生成 tarball 的内容：
-
-```sh
-tar -tzf /tmp/banso-dsh-release/banso-dsh-0.1.1.tgz
-tar -xOf /tmp/banso-dsh-release/banso-dsh-0.1.1.tgz package/package.json
-```
-
-示例文件名来自当前源码版本，实际检查使用命令输出的文件名。检查包内 `package.json` 的版本、入口及依赖，确认没有残留的 `workspace:` 或本地链接。核对：入口和类型文件可用，生成 patch 完整，README、许可证和第三方声明齐备，没有密钥、测试截图或本地运行数据；包内相对链接能在解压目录中解析。跨仓库链接需另行检查。
+使用 npm 发布已检查的 tarball 时，在仓库外的产物目录执行，避免根目录的包管理器约束影响 npm 命令。
 
 ## 许可文件
 
@@ -58,7 +46,7 @@ tar -xOf /tmp/banso-dsh-release/banso-dsh-0.1.1.tgz package/package.json
 
 安装、审批、配置和启动必须使用同一个 `DSH_HOME`。Python 测试脚本显式设置的 `dsh_home` 应指向该目录，不能继续引用旧验证环境。
 
-准备发布时逐包确认 npm 身份、目标版本、registry 和 dist-tag，按依赖顺序发布。使用已完成验证的 tarball 发布；若重新打包，需重新检查产物。发布后，再从 npm 在独立目录仅安装入口包，确认依赖能够自动获取。preset 完成发布与独立安装验证前，官方 Web 保留源码加载说明。
+准备发布时逐包确认 npm 身份、目标版本、registry 和 dist-tag，按依赖顺序发布。使用已完成验证的 tarball 发布；若重新打包，需重新检查产物。发布后，再从 npm 在独立目录仅安装入口包，确认依赖能够自动获取。
 
 发布后的验证使用新的工作目录和 DSH home，不复制旧 profile 或 overrides，按根 README 从 npm 安装固定版本的入口包，再验证 SDK 和 Web。密钥配置可以复用，安装依赖与 profile 配置应重新创建。
 

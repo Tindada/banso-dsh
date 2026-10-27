@@ -4,7 +4,7 @@
 
 ## 文档分工
 
-[根 README](../README.md) 提供源码快速开始，[npm 安装文档](install-npm.md) 提供发布包安装与 SDK 调用步骤；各包 README 说明配置、公共接口和使用限制，跨包链接使用完整仓库 URL。实现细节放在本文，发布流程见 [打包与发布](releasing.md)，进度与历史验证见 [迁移规划](plan.md)，待定事项见 [TODO](todos.md)。包 README 不记录发布进度或维护过程。
+[根 README](../README.md) 提供官方 Web 源码快速开始，[npm 安装文档](install-npm.md) 提供发布包安装与 SDK 调用步骤；各包 README 说明配置、公共接口和使用限制，跨包链接使用完整仓库 URL。实现细节放在本文，发布流程见 [打包与发布](releasing.md)，进度与历史验证见 [迁移规划](plan.md)，待定事项见 [TODO](todos.md)。包 README 不记录发布进度或维护过程。
 
 ## 构建与源码 profile
 
@@ -32,7 +32,14 @@ pnpm exec dsh --profile banso-dsh --dump-config
 
 ## 官方 Web 开发与调试
 
-Web 使用官方界面和 Banso preset，安装与启动见 [源码快速开始](../README.md#官方-web-源码快速开始)，preset 配置与限制见 [包说明](../packages/preset/README.md)。根 `dev` 使用仓库内 `.dsh` 的官方 `web` profile；修改功能插件后重新构建，修改 patch 后重启。
+Web 使用官方界面和 Banso preset。完成上述构建后，在仓库根目录创建 `.env`，配置 `DEEPSEEK_API_KEY`（`JINA_API_KEY` 可留空），然后执行：
+
+```sh
+pnpm run dsh plugin --profile web add "link:$PWD/packages/preset"
+pnpm run dsh --profile web
+```
+
+这些命令使用仓库内 `.dsh` 的官方 `web` profile。preset 配置与限制见 [包说明](../packages/preset/README.md)；修改功能插件后重新构建，修改 patch 后重启。检查合成配置：
 
 ```sh
 pnpm run dsh --profile web --dump-config

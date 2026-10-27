@@ -1,6 +1,6 @@
 {
   "name": "banso-dsh-prompt",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Banso research instructions and per-turn reference time",
   "type": "module",
   "license": "MIT",

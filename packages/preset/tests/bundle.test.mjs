@@ -29,10 +29,14 @@ test('Banso bundle composes with official Web and runs scoped research without c
 
   // Check the shipped tarball and its composition against the actual official CLI.
   await exec('pnpm', ['pack', '--ignore-scripts', '--pack-destination', home], { cwd: packageDir })
-  await exec('tar', ['-xzf', join(home, 'banso-dsh-preset-0.1.0.tgz'), '-C', home])
+  const sourceManifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'))
+  await exec('tar', ['-xzf', join(home, `${sourceManifest.name}-${sourceManifest.version}.tgz`), '-C', home])
   const manifest = JSON.parse(await readFile(join(home, 'package/package.json'), 'utf8'))
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
-  for (const [name, version] of Object.entries({ 'banso-dsh-materials': '0.1.3', 'banso-dsh-prompt': '0.1.1', 'banso-dsh-web-fetch-jina': '0.1.1' })) assert.equal(manifest.dependencies[name], version)
+  for (const name of ['banso-dsh-materials', 'banso-dsh-prompt', 'banso-dsh-web-fetch-jina']) {
+    const dependency = JSON.parse(await readFile(join(packageDir, '..', name.replace('banso-dsh-', ''), 'package.json'), 'utf8'))
+    assert.equal(manifest.dependencies[name], dependency.version)
+  }
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:|link:/)
   assert.equal(await readFile(join(home, 'package/LICENSE'), 'utf8'), await readFile(join(packageDir, '../../LICENSE'), 'utf8'))
   assert.match(await readFile(join(home, 'package/README.md'), 'utf8'), /Banso/)
