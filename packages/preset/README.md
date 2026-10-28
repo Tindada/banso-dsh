@@ -22,7 +22,7 @@ pnpm dev
 在已有 DSH 环境中执行：
 
 ```sh
-dsh plugin --profile web add banso-dsh-preset@0.1.0
+dsh plugin --profile web add banso-dsh-preset@0.1.1
 dsh --profile web
 ```
 
@@ -31,18 +31,24 @@ dsh --profile web
 ## 行为与配置
 
 - 使用 Banso 研究身份、`banso-dsh-prompt` 和每轮 UTC 参考时间。当前 prompt 插件默认研究规则正文为空；可通过 `researchPrompt` 配置补充规则。materials 自带材料使用与来源引用指导。
-- `web_search` 默认使用 DeepSeek Search API，超时预算 60 秒；`web_read` 使用 Jina 获取正文，支持 direct/extract、正文复用及材料隐藏。每轮搜索与阅读共享默认 15 次尝试预算。
-- 模型使用宿主的会话模型配置。搜索沿用官方 DeepSeek API provider 的认证方式，默认凭据名 `DEEPSEEK_API_KEY`；Jina 读取启动环境的 `JINA_API_KEY`，可为空。模型可用并不意味着搜索凭据已配置。
-- provider 与研究工具共享 preset 内的独立 `web` 服务，不修改宿主 Web Search 设置。官方进程环境变量 `DSH_WEB_SEARCH_PROVIDER` / `DSH_WEB_FETCH_PROVIDER` 仍会影响该服务，使用默认组合时应保持未设置。
+- `web_search` 搜索超时预算为 60 秒；`web_read` 支持 direct/extract、正文复用及材料隐藏。每轮搜索与阅读共享默认 15 次尝试预算。
+- 模型、`web` 服务及 provider 配置均继承宿主。
 
 本包不限制宿主工具。在默认官方 Web 中，Banso 的三个研究工具之外还会继承 `working_directory`；其他 preset 的终端和文件编辑工具不会因此加入 Banso。用户额外注册的宿主全局工具也可能被继承，preset 不是安全沙箱。
 
-配置入口为 `preset-banso.config.plugins`。persona、研究提示词及 `research-web` 组均在该列表中；web 服务、provider、搜索工具和 materials 必须保持在同一个隔离组内。profile patch 覆盖 `plugins` 时按完整列表替换，不按内部 id 自动合并；修改后重启 DSH。
+在 profile 的 `cordis.patch.yml` 中切换搜索和抓取后端，例如：
+
+```yaml
+- id: web
+  config:
+    searchProvider: deepseek-search-api
+    fetchProvider: deepseek-fetch-api
+```
+
+`config` 整体替换，须同时保留搜索与抓取选择；保存后自动重新加载。
 
 会话和资料使用宿主原有存储，按会话隔离；不自动迁移旧 Banso Web/SDK 会话。官方页面沿用现有工具展示，没有新增材料面板；附件等扩展功能未验收。
 
 ## 验证
 
-完成根目录构建后，执行 `pnpm --filter banso-dsh-preset test`。集成测试检查配置合成、真实 preset loader 和默认 loop、研究流程、工具列表、其他 preset 共存及打包产物，使用模拟模型/provider，不验证在线 Search/Jina 可用性。
-
-2026-10-27 本机验证通过：workspace 类型检查与构建、上述集成测试及 materials/Banso 回归；临时官方 Web 中完成选择 Banso、研究工具详情、追问、流式输出、停止、刷新恢复及恢复后继续追问。页面验收使用模拟服务，未调用在线 Search/Jina。
+完成根目录构建后，执行 `pnpm --filter banso-dsh-preset test`。集成测试检查配置合成、真实 preset loader 和默认 loop、研究流程、工具列表、其他 preset 共存及打包产物，使用模拟模型/provider，不验证在线服务可用性。

@@ -11,7 +11,8 @@
 开发基线为 DSH `0.2.1-rc.2`、Cordis `4.0.5`，对外兼容范围为 `>=0.2.1-rc.2 <0.3.0-0`。自建 Web/UI 已停止维护并从源码删除，Web 改用官方界面与 [Banso preset](../packages/preset/README.md)；SDK 入口保留。旧 profile 和会话文件不删除，也不自动迁移。下文保留历史验证与发布记录。项目使用 pnpm workspace：
 
 - `base` 提供 SDK 环境和默认 agent loop；`banso` 组合业务插件，profile 只加载 `banso-dsh`。基础 patch 在 base 维护，构建时复制到 banso。
-- 搜索默认使用官方 `deepseek-search-api`，保留 `web-search-tavily` 作为可选 provider；网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，可通过 `fetchProvider: deepseek-fetch-api` 切换到 DeepSeek Fetch。
+- SDK bundle 搜索默认使用官方 `deepseek-search-api`，保留 `web-search-tavily` 作为可选 provider；网页抓取默认使用 `web-fetch-jina` 接入 Jina Reader，可通过 `fetchProvider: deepseek-fetch-api` 切换到 DeepSeek Fetch。
+- Web 的 Banso preset 继承宿主 `web` 服务和 provider 选择，不再创建隔离服务或自动注册 Jina；研究工具与 materials 保留在 preset 作用域内。
 - `prompt` 提供研究规则和每轮固定的 UTC 参考时间。用户通过消息指定历史日期或研究范围。参考时间按 agent 保存在内存中，恢复后的下一轮重新生成，研究中途热重载不保证保留原时间。
 - `materials` 统一提供 `web_read({target, mode, focus?})`，每次显式选择 direct（正文）或 extract（按非空 focus 提取证据）。自动获取或复用正文，不再支持启动时的 readMode 或 BANSO_WEB_READ_MODE；evaluation 移除对应覆盖和 manifest 字段，旧实验不可直接续跑。
 - `materials` 包装原生 search 的短回执；read 使用扁平结果记录模式、可选正文、证据及错误。extract 默认沿用主模型，可独立配置；输入超预算报错，不分块。direct 不调用提取 LLM。Banso 关闭原生 fetch 工具，加载 DSH 工具超时策略。
@@ -56,6 +57,8 @@ materials 自动禁用原生 `web_fetch` 后，包内类型检查、编译和 46
 2026-10-27 删除这两个源码包和仅验证自建页面的测试，开发入口改为官方 Web profile。历史实现可从 Git 记录恢复，已发布 npm 包仍保留。
 
 ## 发布状态
+
+2026-10-28 用户确认已发布并查询验证 `banso-dsh-preset@0.1.1`。该版本继承宿主 `web` 服务和 provider 配置，移除内部隔离服务及 Jina 自动注册；依赖 prompt `0.1.2`、materials `0.1.4`。发布前类型检查、构建及 56 项模拟测试通过；桌面端源码链接会话日志确认抓取使用 DeepSeek Fetch API。本次发布后的独立 npm 安装验证通过。
 
 2026-10-27 已发布 `banso-dsh-preset@0.1.0`、`banso-dsh-materials@0.1.4`、`banso-dsh-prompt@0.1.2` 和 `banso-dsh-web-fetch-jina@0.1.2`。用户从 npm 安装 preset 后确认官方 Web 可以正常使用；入口包自动获取上述业务依赖。本次未发布 SDK 入口及其他包，未覆盖全新机器、所有平台或完整功能。npm 安装步骤见[安装文档](install-npm.md#官方-web)。
 

@@ -22,10 +22,9 @@ pnpm build
 
 ```dotenv
 DEEPSEEK_API_KEY=你的DeepSeek密钥
-JINA_API_KEY=
 ```
 
-`JINA_API_KEY` 可留空。加载 Banso preset 并启动官方 Web：
+加载 Banso preset 并启动官方 Web：
 
 ```sh
 pnpm run dsh plugin --profile web add "link:$PWD/packages/preset"

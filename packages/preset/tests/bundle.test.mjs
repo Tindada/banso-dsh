@@ -33,7 +33,7 @@ test('Banso bundle composes with official Web and runs scoped research without c
   await exec('tar', ['-xzf', join(home, `${sourceManifest.name}-${sourceManifest.version}.tgz`), '-C', home])
   const manifest = JSON.parse(await readFile(join(home, 'package/package.json'), 'utf8'))
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml')
-  for (const name of ['banso-dsh-materials', 'banso-dsh-prompt', 'banso-dsh-web-fetch-jina']) {
+  for (const name of ['banso-dsh-materials', 'banso-dsh-prompt']) {
     const dependency = JSON.parse(await readFile(join(packageDir, '..', name.replace('banso-dsh-', ''), 'package.json'), 'utf8'))
     assert.equal(manifest.dependencies[name], dependency.version)
   }
@@ -84,15 +84,12 @@ test('Banso bundle composes with official Web and runs scoped research without c
     } })
   } }
   await ctx.plugin(providers)
-  ctx.loader.builtins.fixture = providers
   await ctx.plugin((await fromDsh('@deepseek-ai/dsh-agent-preset-registry')).default, { default: 'standard' })
   const declaration = composeEntries([loadOptionalPatches('test', join(packageDir, 'cordis.patch.yml'))])[0]
-  const webRows = declaration.config.plugins.find(row => row.id === 'research-web').config
-  const web = webRows.find(row => row.id === 'web')
-  assert.deepEqual(web.config, { searchProvider: 'deepseek-search-api', fetchProvider: 'jina' })
-  assert.equal(webRows.find(row => row.id === 'tool-web').config.searchTimeoutMs, 60000)
-  web.config = { searchProvider: 'fixture', fetchProvider: 'fixture' }
-  webRows.push({ id: 'fixture', name: 'cordis:fixture' })
+  assert.deepEqual(declaration.config.plugins.map(row => row.id), ['persona', 'banso-prompt', 'tool-web', 'banso-materials'])
+  assert.equal(declaration.config.plugins.find(row => row.id === 'tool-web').config.searchTimeoutMs, 60000)
+  assert.equal(entries.filter(row => row.id === 'web' && !row.disabled).length, 1)
+  assert.equal(entries.filter(row => row.id === 'web-deepseek-api' && !row.disabled).length, 1)
   declaration.config.plugins.find(row => row.id === 'banso-prompt').config = { researchPrompt: 'RESEARCH RULE FIXTURE' }
   await ctx.loader.root.update([
     { id: 'preset-standard', name: '@deepseek-ai/dsh-agent-preset', config: { id: 'standard', plugins: [
@@ -113,7 +110,10 @@ test('Banso bundle composes with official Web and runs scoped research without c
         this.requests.push(request)
         const last = request.messages.findLast(m => m.role === 'user' && m.source.kind === 'user')
         const results = request.messages.slice(request.messages.indexOf(last) + 1).filter(m => m.role === 'tool')
-        const steps = textOf(last) === 'standard' ? [['web_search', { queries: ['other preset'] }]] : [
+        const steps = textOf(last) === 'standard' ? [
+          ['web_search', { queries: ['other preset'] }],
+          ['web_fetch', { url: 'https://example.com/standard' }],
+        ] : [
           ['web_search', { queries: ['research'] }],
           ['web_read', { target: 'S1', mode: 'direct' }],
           ['web_read', { target: 'S1', mode: 'extract', focus: 'facts' }],
@@ -163,17 +163,19 @@ test('Banso bundle composes with official Web and runs scoped research without c
   assert.doesNotMatch(snapshot(model.requests[3]), /FULL PAGE BODY/)
   assert.doesNotMatch(snapshot(model.requests[4]), /Material: S1/)
   assert.equal(model.extractions, 1)
-  assert.equal(records[1].fetches, 1)
-  assert.notEqual(records[1].web, ctx.web)
+  assert.equal(records.length, 1)
+  assert.equal(records[0].fetches, 1)
+  assert.equal(records[0].searches, 1)
   assert.equal(ctx.tools.get('web_search', other), originalSearch)
   await ask(other, 'standard')
   assert.deepEqual(errors, [])
   const last = model.requests.at(-1)
   assert.match(JSON.stringify(last.messages), /HOST IDENTITY/)
   assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
-  assert.match(textOf(last.messages.findLast(m => m.role === 'tool')), /Search snippet/)
-  assert.equal(records[0].searches, 1)
-  assert.equal(records[0].fetches, 0)
+  assert.match(textOf(last.messages.find(m => m.role === 'tool')), /Search snippet/)
+  assert.match(textOf(last.messages.findLast(m => m.role === 'tool')), /FULL PAGE BODY/)
+  assert.equal(records[0].searches, 2)
+  assert.equal(records[0].fetches, 2)
   assert.equal(ctx.tools.get('web_search', other), originalSearch)
   assert.ok(ctx.tools.schemas(scopeOf(other.ctx)).some(tool => tool.name === 'web_fetch'))
 })

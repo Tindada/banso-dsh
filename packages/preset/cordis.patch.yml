@@ -15,27 +15,12 @@
               includeRuntimeContext: true
           - id: banso-prompt
             name: banso-dsh-prompt
-          # Providers and consumers share this preset-local web service.
-          - id: research-web
-            name: cordis:group
-            group: true
-            isolate:
-              web: true
+          # Research tools inherit the host web service and its provider selection.
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
             config:
-              - id: web
-                name: '@deepseek-ai/dsh-web'
-                config:
-                  searchProvider: deepseek-search-api
-                  fetchProvider: jina
-              - id: web-deepseek-api
-                name: '@deepseek-ai/dsh-web-deepseek-api'
-              - id: web-fetch-jina
-                name: banso-dsh-web-fetch-jina
-              - id: tool-web
-                name: '@deepseek-ai/dsh-tool-web'
-                config:
-                  search: true
-                  fetch: false
-                  searchTimeoutMs: 60000
-              - id: banso-materials
-                name: banso-dsh-materials
+              search: true
+              fetch: false
+              searchTimeoutMs: 60000
+          - id: banso-materials
+            name: banso-dsh-materials

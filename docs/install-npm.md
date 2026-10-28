@@ -6,17 +6,16 @@
 
 ```sh
 pnpm add @deepseek-ai/dsh@0.2.1-rc.2
-pnpm exec dsh plugin --profile web add banso-dsh-preset@0.1.0
+pnpm exec dsh plugin --profile web add banso-dsh-preset@0.1.1
 ```
 
 在该目录创建 `.env`（也可复制已有配置）：
 
 ```dotenv
 DEEPSEEK_API_KEY=你的DeepSeek密钥
-JINA_API_KEY=
 ```
 
-`JINA_API_KEY` 可留空。启动后，在新任务中选择 **Banso** 和模型：
+搜索和抓取沿用宿主 provider 配置。启动后，在新任务中选择 **Banso** 和模型：
 
 ```sh
 pnpm exec dsh --profile web
