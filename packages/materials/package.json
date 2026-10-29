@@ -1,7 +1,12 @@
 {
   "name": "banso-dsh-materials",
   "version": "0.1.4",
-  "description": "Web research tools, session-local materials and evidence snapshots",
+  "description": "Page reading, evidence extraction and session-local material management for existing DeepSeek Harness agents",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tindada/banso-dsh.git",
+    "directory": "packages/materials"
+  },
   "type": "module",
   "license": "MIT",
   "engines": {
