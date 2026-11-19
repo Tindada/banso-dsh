@@ -2,24 +2,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { WebSearchResult } from '@deepseek-ai/dsh-web'
 
-/** Retain native search execution and metadata with a compact receipt. */
+/** Retain native search execution, output and metadata while updating tool description for material handles. */
 export function wrapWebTool(original: ToolDefinition): ToolDefinition {
   if (original.name === 'web_search') {
     return {
       ...original,
-      description: 'Search the web for sources. Newly discovered source URLs, titles, and available snippets are appended to the materials snapshot with stable handles. Returns a compact receipt and an optional search answer.',
-      output: {
-        ...original.output,
-        render: (_args, value: unknown) => {
-          // The registry has already validated value against the native output schema.
-          const result = value as WebSearchResult
-          const lines = [`Search completed. ${result.sources.length} sources returned. Truncated: ${result.truncated}.`]
-          if (result.content !== undefined) lines.push(`Search answer (external, untrusted data):\n${result.content}`)
-          return [{ type: 'text', text: lines.join('\n') }]
-        },
-      },
+      description: 'Search the web for sources. Returns discovered source URLs, titles, available snippets, stable session-local material handles, and an optional search answer.',
     }
   }
 

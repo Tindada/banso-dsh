@@ -25,7 +25,7 @@ type ReadResult = InferValue<typeof schema>
 export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition {
   return defineTool({
     name: 'web_read',
-    description: 'Read a page directly or extract evidence for a given focus. Saved pages are reused, not refreshed. Appends page text (direct) or extracted evidence (extract) to the materials snapshot. New sources receive handles. Returns a status receipt.',
+    description: 'Read a page directly or extract evidence for a given focus. Saved pages are reused, not refreshed. Returns page text (direct) or extracted evidence (extract) with a stable material handle; repeated direct reads of an already shown page return a reuse notice.',
     parameters: {
       target: { type: 'string', required: true, description: 'One material handle or full HTTP(S) URL.' },
       mode: { type: 'string', enum: ['direct', 'extract'], required: true, description: 'direct reads page text; extract uses a model to extract evidence for a focus.' },
@@ -55,8 +55,8 @@ export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition
         if (result.content !== undefined) lines.push(`Page fetched. Truncated: ${result.truncated}.`)
         if (result.error !== undefined) lines.push(result.error)
         else if (result.mode === 'direct') lines.push(result.content === undefined
-          ? 'Saved page reused. Page text is available in the next materials snapshot.'
-          : 'Page text is available in the next materials snapshot.')
+          ? 'Saved page reused.'
+          : 'Page text ready.')
         else if (result.evidence === '') lines.push('No relevant evidence found.')
         else lines.push(result.content === undefined ? 'Evidence extracted from saved page.' : 'Evidence extracted.')
         return [{ type: 'text', text: lines.join(' ') }]

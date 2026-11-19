@@ -1,6 +1,6 @@
-# 会话资料与证据快照
+# 会话资料与网页阅读
 
-`banso-dsh-materials` 提供网页搜索、证据提取或正文读取、材料隐藏，以及供主 agent 阅读的资料快照。资料在同一会话中保存，可在后续追问中复用。
+`banso-dsh-materials` 提供网页搜索包装、正文读取与证据提取、稳定会话内 handle（`S1`、`S2`），以及共享研究预算。资料在同一会话中保存，可在后续追问中复用，内容直接随工具结果尾部返回以保持前缀缓存命中。
 
 ## 独立 bundle 安装
 
@@ -41,7 +41,7 @@ dsh --profile web
 
 目标环境需提供 `sessionProjections`、`agents`、`tools`、`web`、`llm` 和 `systemPrompt` 服务。搜索需启用原生 `web_search` 并配置搜索 provider；没有搜索工具时，仍可通过 `web_read` 读取已知 URL。网页阅读需要可用的抓取 provider。
 
-插件支持从宿主或 preset 继承的 `web_search`，包括遵循 DSH 原生搜索结果协议的自定义实现；接管搜索描述和结果文本，保留搜索执行逻辑。不能与直接注册在 agent 自身作用域的同名搜索工具共存。
+插件支持从宿主或 preset 继承的 `web_search`，包括遵循 DSH 原生搜索结果协议的自定义实现；接管搜索描述并在 `tools/post-execute` 阶段将结果渲染为带 handle 的结构化文本，保留原生搜索执行逻辑。不能与直接注册在 agent 自身作用域的同名搜索工具共存。
 
 搜索包装遵循插件加载时的作用域：在宿主层加载时处理所有 agent；在 preset 或 agent 内加载时，只处理该作用域及其后代中的 agent，不包装其他 preset 的搜索。空白会话切换 preset 后，包装范围随作用域关系更新。
 
@@ -69,8 +69,8 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 | 模式 | 阅读工具 | 主 agent 看到的内容 |
 | --- | --- | --- |
-| `extract` | `web_read({target, mode: "extract", focus})` | 按 focus 提取的证据 |
-| `direct` | `web_read({target, mode: "direct"})` | 已保存的格式化正文 |
+| `extract` | `web_read({target, mode: "extract", focus})` | 按 focus 提取的证据（随工具结果返回） |
+| `direct` | `web_read({target, mode: "direct"})` | 已保存的格式化正文（首次随工具结果返回，重复读取返回简短复用提示） |
 
 同一 session 可逐次切换；两种方式共用正文缓存，不需要单独调用 fetch。direct 仍通过当前 fetch provider 获取正文，不意味着切换到 HTTP provider。
 
@@ -78,7 +78,9 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 ### 搜索
 
-`web_search` 沿用 DSH 原生搜索参数。返回简短回执，包含来源数量、截断状态和可选 answer；来源资料进入快照，并获得当前会话内的 handle，例如 `S1`。
+`web_search` 沿用 DSH 原生搜索参数。结果直接随 `tool/result` 返回，包含来源数量、截断状态、外部非信任数据提示、本次返回的全部来源（附带会话内稳定 handle，例如 `S1`）及可选 answer。
+
+再次搜索命中同一精确 URL 时，复用已有 handle（标注 `(existing)`），同时保留本次搜索返回的新 snippet 与元数据，不隐藏换词搜索带来的新片段。
 
 ### 提取证据
 
@@ -90,9 +92,7 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 `target` 为资料 handle 或完整 HTTP(S) URL，`focus` 为非空的提取目标。每次读取一个页面，多页使用多个调用。
 
-已有成功正文时直接复用，否则抓取并保存格式化正文。每次读取根据本次 focus 提取证据，成功结果按 focus 追加保存；没有相关证据时不清除已有证据。可以对同一来源以不同 focus 追问，无需重新抓取。
-
-工具返回状态或错误的简短回执，证据通过资料快照提供给主 agent，全文不会自动进入主模型上下文。证据只覆盖所指定的 focus，不能视为整篇网页的完整摘要。
+已有成功正文时直接复用，否则抓取并保存格式化正文。每次读取根据本次 focus 提取证据，成功结果按 focus 追加保存，并直接随工具结果返回给主 agent；全文不会进入主模型上下文。没有相关证据时不清除已有证据。可以对同一来源以不同 focus 追问，无需重新抓取。证据只覆盖所指定的 focus，不能视为整篇网页的完整摘要。
 
 ### 直接读取正文
 
@@ -104,56 +104,7 @@ Banso 组合加载 `@deepseek-ai/dsh-tool-call-timeout-policy` 执行整体超�
 
 `target` 同样支持完整 HTTP(S) URL。首次成功抓取后保存正文，后续调用复用已有正文，不刷新网页，也不调用提取模型。
 
-工具返回获取或复用结果的简短回执，正文进入资料快照；同一材料只展示一份正文。保存的内容是带来源页头和提示的格式化文本，不是原始 HTML，仍可能被抓取 provider 截断。
-
-### 批量隐藏材料
-
-`materials_hide` 接受以下参数：
-
-```json
-{"handles": ["S3", "S7"]}
-```
-
-`handles` 为必填的非空字符串数组，重复值去重。结果包含 `hidden`、`alreadyHidden`、`unknown` 三个字符串数组，分别表示本次隐藏、已经隐藏和不存在的 handle。未知 handle 不阻止其他条目隐藏，重复隐藏没有额外副作用。此工具不调用网络或 LLM。
-
-隐藏仅从主 agent 的资料快照中移除条目，不删除正文、证据或 handle。全部隐藏后，主 agent 会看到没有可见材料的快照。
-
-没有独立恢复工具。再次搜索命中同一精确 URL，或通过 handle／URL 阅读，会重新展示材料。已识别材料的阅读即使返回抓取或提取失败，也会重新展示；非法输入、未知 handle、整体取消和超时不会改变可见性。
-
-## 资料展示
-
-快照只展示未隐藏的资料，并保留来源和正文截断提示。每条材料以最近一次成功阅读的模式展示，同一快照可混合两种模式：
-
-- `extract` 模式：有证据时展示证据；尚无证据时展示搜索 snippet。提取失败不自动退回全文展示。
-- `direct` 模式：有正文时展示正文，不展示提取证据；尚无正文时展示搜索 snippet。空正文也视为已保存。
-
-失败或取消不切换展示模式；成功提取但无相关证据仍切换为 extract。正文和累计证据均保留，切换只改变展示；同一材料并发阅读以成功结果写入日志的顺序为准。尚未成功阅读时展示搜索 snippet（如有）。
-
-搜索 snippet 仍保存在资料中，显示证据或正文时只是暂不展示。资料变化会在后续模型步骤中反映到快照。
-
-### 快照结构示意
-
-材料快照是提供给主 agent 的文本内容，不是 Web 界面的资料面板。开头展示研究预算、调用尝试次数和剩余额度。材料区说明这是当前资料状态，并标明来源内容属于外部数据，不应当作指令。以下省略预算头，按 handle 展示未隐藏的材料：
-
-- **来源**：handle 和请求 URL，以及可用的标题、发布时间。
-- **已保存正文的信息**：抓取后的最终 URL、截断标记、保存时间（UTC）和字符数；仅在已有正文时出现。
-- **阅读内容**：extract 模式按 focus 展示证据及提取时间；direct 模式展示正文。尚无相应内容时使用搜索 snippet（如有）。
-
-以下为 extract 模式的简化示意，省略了部分字段，不是固定输出格式：
-
-```text
-Material: S1
-URL: https://example.com/project
-Title: 项目介绍
-Saved page:
-Final URL: https://example.com/project
-Truncated: false
-Evidence focus: 项目的开源范围和许可证
-Evidence:
-项目的核心代码采用 MIT 许可证。
-```
-
-同一材料可包含多组 focus 证据。direct 模式将证据部分换为 `Page text:` 正文；已隐藏的材料不出现在快照中。
+同一材料首次以 `direct` 模式阅读时，工具结果返回带 handle、最终 URL、截断标记的格式化正文（不是原始 HTML）；若同一材料此前已通过 `direct` 返回过正文，再次 `direct` 只返回简短复用提示，避免重复输出长正文。
 
 ## 失败与恢复限制
 
@@ -170,13 +121,12 @@ const state = ctx.sessionProjections.stateOf(session, 'bansoMaterials')
 const material = state?.items.S1
 ```
 
-返回状态由框架持有，调用方不得修改。导出 `Material`、`MaterialsState`、`FetchedContent`、`Evidence` 和 `ReadMode` 类型。
+返回状态由框架持有，调用方不得修改。`stateVersion` 为 `4`。导出 `Material`、`MaterialsState`、`FetchedContent`、`Evidence` 和 `ReadMode` 类型。
 
-- `items` 按 handle 保存资料，`urlIndex` 按精确请求 URL 索引；首次有效发现按日志顺序分配 `S1`、`S2`。重定向的最终 URL 不合并其他条目。
-- `hidden` 缺省或为 `false` 时可见，为 `true` 时隐藏整个条目。再次搜索命中同一精确请求 URL 或收到有效阅读结果时设为 `false`；正文、证据及 handle 均保留。
+- `items` 按 handle 保存资料，`urlIndex` 按精确请求 URL 索引；首次有效发现按日志提交顺序分配 `S1`、`S2`。重定向的最终 URL 不合并其他条目。
 - 资料保留标题、snippet、发布时间等搜索字段。搜索仅覆盖本次提供的字段，不清除正文或证据。
-- `displayMode` 为最近成功阅读的 `direct` 或 `extract`；尚未成功阅读时缺省。
 - `fetched` 保存最后成功的格式化正文、最终 URL、截断标记及正文入库时间。失败保留此前正文。
+- `pageShown` 标记该材料是否已在 `direct` 模式下向模型返回过正文，用于避免重复输出长正文。
 - `evidence` 为追加的证据组，每组保存 `focus`、`text` 和提取结果入库时间 `time`。失败和空结果不清除已有证据。
 - 正文复用不更改入库时间，也不重复记录全文。正文和证据的时间表示保存时间，单位为 Unix 毫秒。
 
@@ -184,8 +134,8 @@ const material = state?.items.S1
 
 `researchBudget` 控制每轮 search/read 的共享额度，配置示例见上方 Profile 配置。每轮开始时用量清零，已有材料继续保留。
 
-每次 `web_search` 或 `web_read` 调用尝试都计数，包括参数错误、失败、取消和被预算拒绝的调用。direct、extract 和正文缓存复用均计数，内部重试不重复计数；`materials_hide` 和被禁用的 `web_fetch` 不计数。因此尝试次数可以超过额度，但获准执行的研究调用不会超过额度。
+每次 `web_search` 或 `web_read` 调用尝试都计数，包括参数错误、失败、取消和被预算拒绝的调用。direct、extract 和正文缓存复用均计数，内部重试不重复计数；被禁用的 `web_fetch` 不计数。因此尝试次数可以超过额度，但获准执行的研究调用不会超过额度。
 
-资料快照显示总额度、尝试次数和剩余额度。耗尽后，search/read 不再提供给模型，继续调用也会被拒绝。本功能仅覆盖默认 agent loop 的直接工具调用，不支持绕过 loop 的直接执行或嵌套工具调用计量。
+研究预算通过 DSH 动态运行上下文（`runtime-context`）展示总额度、尝试次数和剩余额度。耗尽后，search/read 不再提供给模型，继续调用也会被拒绝。本功能仅覆盖默认 agent loop 的直接工具调用，不支持绕过 loop 的直接执行或嵌套工具调用计量。
 
-完整会话日志可以重建用量；不提供旧持久化资料缓存的迁移，旧缓存缺少预算字段时应使用新会话或从完整日志重建。恢复会话本身不会清零，新一轮开始时才会清零。修改额度不会改写调用历史，后续工具控制使用当前配置。
+完整会话日志可以重建用量；不提供旧持久化资料缓存的迁移，旧缓存版本不匹配时应使用新会话或从完整日志重建。恢复会话本身不会清零，新一轮开始时才会清零。修改额度不会改写调用历史，后续工具控制使用当前配置。

@@ -89,12 +89,11 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig, mode = 'ex
   ctx.llm.registerAdapter(['mock'], adapter)
   return { ctx, adapter, errors, fetchCalls }
 }
-const snapshots = request => request.messages.filter(message => message.source.kind === 'banso-materials' && message.source.form === 'snapshot')
 const runtimeContexts = request => request.messages.filter(message => message.source.kind === 'runtime-context')
 const textOf = message => message.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
 const stateOf = (ctx, agent) => ctx.sessionProjections.stateOf(agent.session, 'bansoMaterials')
 
-test('search and read feed materials through metadata, survive JSONL and continue after resume', async t => {
+test('search and read feed materials through tool results, survive JSONL and continue after resume', async t => {
   const root = await mkdtemp(join(tmpdir(), 'banso-materials-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const first = await setup(join(root, 'enabled'))
@@ -106,18 +105,11 @@ test('search and read feed materials through metadata, survive JSONL and continu
   assert.deepEqual(first.errors, [])
   assert.equal(first.adapter.requests.length, 3)
   const [initial, searched, fetched] = first.adapter.requests
-  assert.equal(snapshots(initial).length, 1)
-  assert.equal(initial.messages[0].role, 'system')
-  assert.equal(initial.messages[1], snapshots(initial)[0])
-  assert.equal(textOf(initial.messages[2]), 'research')
-  assert.equal(snapshots(searched).length, 1)
-  assert.equal(searched.messages[1], snapshots(searched)[0])
-  assert.ok(textOf(snapshots(searched)[0]).startsWith(textOf(snapshots(initial)[0])))
-  assert.match(textOf(snapshots(searched)[0]), /Search snippet: Preview/)
-  assert.equal(snapshots(fetched).length, 1)
-  assert.equal(fetched.messages[1], snapshots(fetched)[0])
-  assert.ok(textOf(snapshots(fetched)[0]).startsWith(textOf(snapshots(searched)[0])))
-  assert.match(textOf(snapshots(fetched)[0]), /Evidence/)
+  for (const request of first.adapter.requests) {
+    assert.equal(request.messages[0].role, 'system')
+    assert.ok(!request.messages.some(message => message.source.kind === 'banso-materials'))
+  }
+  assert.equal(textOf(initial.messages[1]), 'research')
   assert.equal(fetched.messages.filter(message => textOf(message).includes('Evidence.')).length, 1)
   assert.equal(fetched.messages.filter(message => message.role === 'assistant').length, 2)
   assert.match(textOf(runtimeContexts(initial).at(-1)), /Research budget: 15\. Attempts used: 0\. Remaining: 15/)
@@ -125,13 +117,13 @@ test('search and read feed materials through metadata, survive JSONL and continu
   assert.match(textOf(runtimeContexts(fetched).at(-1)), /Research budget: 15\. Attempts used: 2\. Remaining: 13/)
   const toolMessages = first.adapter.requests[2].messages.filter(message => message.role === 'tool')
   assert.match(toolMessages[0].content[0].text, /^Search completed/)
-  assert.match(toolMessages[1].content[0].text, /Page fetched/)
-  assert.doesNotMatch(toolMessages[1].content[0].text, /Evidence\. Focus:/)
+  assert.match(toolMessages[0].content[0].text, /Material: S1[\s\S]*Search snippet: Preview/)
+  assert.match(toolMessages[1].content[0].text, /Material: S1[\s\S]*Page fetched\.[\s\S]*Evidence\. Focus:/)
+  assert.doesNotMatch(toolMessages[1].content[0].text, /FULL BODY ONLY/)
   const events = agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
   assert.equal(events.length, 2)
   assert.ok(events.every(event => event.surfaceOp === 'append'))
   assert.match(events[1].data.meta.content, /FULL BODY ONLY/)
-  const locatorBefore = structuredClone(first.ctx.sessionProjections.stateOf(agent.session, 'bansoMaterialsSnapshot'))
   const before = structuredClone(stateOf(first.ctx, agent))
   assert.equal(before.items.S1.url, url)
   assert.match(before.items.S1.fetched.content, /FULL BODY ONLY/)
@@ -141,7 +133,6 @@ test('search and read feed materials through metadata, survive JSONL and continu
   assert.equal(first.adapter.extractions[0].provider, 'mock')
   assert.equal(first.adapter.extractions[0].model, 'mock')
   assert.equal(before.items.S1.evidence.length, 1)
-  assert.doesNotMatch(textOf(snapshots(fetched)[0]), /FULL BODY ONLY/)
   assert.deepEqual(before.pendingCalls, {})
   await first.ctx.fiber.dispose()
   closed = true
@@ -150,7 +141,6 @@ test('search and read feed materials through metadata, survive JSONL and continu
   const restored = (await resumed.ctx.agents.resume({ resumeSessionId: SessionId('research'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
   assert.deepEqual(stateOf(resumed.ctx, restored), before)
   assert.equal(resumed.adapter.requests.length, 0)
-  assert.deepEqual(resumed.ctx.sessionProjections.stateOf(restored.session, 'bansoMaterialsSnapshot'), locatorBefore)
 
   await cp(join(root, 'enabled'), join(root, 'disabled'), { recursive: true })
   const control = await setup(join(root, 'disabled'), false)
@@ -170,8 +160,8 @@ test('search and read feed materials through metadata, survive JSONL and continu
   control.adapter.requests = []
   controlAgent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
   await controlAgent.whenIdle()
-  assert.equal(snapshots(control.adapter.requests.at(-1)).length, 1)
-  assert.match(textOf(snapshots(control.adapter.requests.at(-1))[0]), /Evidence/)
+  assert.ok(!control.adapter.requests.at(-1).messages.some(message => message.source.kind === 'banso-materials'))
+  assert.match(textOf(control.adapter.requests.at(-1).messages.filter(m => m.role === 'tool').at(-1)), /Evidence/)
   assert.deepEqual(control.errors, [])
   assert.deepEqual(stateOf(resumed.ctx, restored), before)
   resumed.adapter.focus = 'follow-up facts'
@@ -180,19 +170,13 @@ test('search and read feed materials through metadata, survive JSONL and continu
   await restored.whenIdle()
   assert.deepEqual(resumed.errors, [])
   assert.equal(resumed.adapter.requests.length, 3)
-  // Step 0 (new turn, budget reset only) and step 1 (duplicate search) keep the same snapshot message.
-  assert.equal(snapshots(resumed.adapter.requests[0])[0].id, locatorBefore.messageId)
-  assert.equal(snapshots(resumed.adapter.requests[1])[0].id, locatorBefore.messageId)
-  // Step 2 (new follow-up evidence) replaces the fixed slot in place with an appended prefix.
-  assert.notEqual(snapshots(resumed.adapter.requests[2])[0].id, locatorBefore.messageId)
-  assert.equal(resumed.adapter.requests[2].messages[1], snapshots(resumed.adapter.requests[2])[0])
-  assert.ok(textOf(snapshots(resumed.adapter.requests[2])[0]).startsWith(textOf(snapshots(resumed.adapter.requests[0])[0])))
   const after = stateOf(resumed.ctx, restored)
   assert.deepEqual(after.urlIndex, before.urlIndex)
   assert.equal(after.nextHandle, before.nextHandle)
   assert.equal(after.items.S1.fetched.content, before.items.S1.fetched.content)
   const resumedResults = restored.session.snapshotEvents().filter(event => event.type === 'tool/result')
-  assert.match(resumedResults.at(-1).data.message.content[0].text, /Evidence extracted from saved page/)
+  assert.match(resumedResults.at(-2).data.message.content[0].text, /Material: S1 \(existing\)[\s\S]*Search snippet: Preview/)
+  assert.match(resumedResults.at(-1).data.message.content[0].text, /Saved page reused\.[\s\S]*Evidence focus: follow-up facts[\s\S]*Evidence\. Focus: follow-up facts/)
   assert.equal(resumedResults.at(-1).data.meta.content, undefined)
   assert.equal(resumed.fetchCalls.length, 0)
   assert.equal(after.items.S1.evidence.length, 2)
@@ -230,10 +214,9 @@ test('single handle and URL calls overlap in the default loop and restore new ha
   assert.equal(before.nextHandle, 3)
   const results = agent.session.snapshotEvents().filter(event => event.type === 'tool/result' && event.data.meta?.requestUrl)
   assert.deepEqual(results.map(event => event.data.meta.requestUrl), [url, second])
-  assert.match(textOf(results[0].data.message), /S1/)
-  assert.doesNotMatch(textOf(results[1].data.message), /S2/)
-  assert.match(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Material: S2/)
-  assert.match(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Search snippet: Preview/)
+  assert.match(textOf(results[0].data.message), /Material: S1/)
+  assert.match(textOf(results[1].data.message), /Material: S2/)
+  assert.match(textOf(agent.session.snapshotEvents().filter(e => e.type === 'tool/result')[0].data.message), /Search snippet: Preview/)
 
   const other = (await first.ctx.agents.create({ sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
   const isolated = await first.ctx.tools.execute({ agent: other, name: 'web_read', arguments: { target: 'S1', mode: 'extract', focus: 'facts' }, callId: 'isolated', signal: new AbortController().signal })
@@ -255,7 +238,7 @@ test('single handle and URL calls overlap in the default loop and restore new ha
 })
 
 
-test('Jina Markdown feeds extraction while the material snapshot exposes only evidence', async t => {
+test('Jina Markdown feeds extraction while the tool result exposes only evidence', async t => {
   const requests = []
   const markdown = '# Reader article\n\n**Extracted evidence.**'
   const server = createServer((req, res) => {
@@ -277,22 +260,20 @@ test('Jina Markdown feeds extraction while the material snapshot exposes only ev
   await agent.whenIdle()
   assert.deepEqual(errors, [])
   assert.deepEqual(requests, [`/${url}`])
-  const result = agent.session.snapshotEvents().filter(event => event.type === 'tool/result').at(-1)
-  assert.match(textOf(result.data.message), /S1.*Page fetched/)
+  const toolEvents = agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
+  const result = toolEvents.at(-1)
+  assert.match(textOf(result.data.message), /Material: S1[\s\S]*Page fetched\.[\s\S]*Evidence\./)
   assert.ok(!textOf(result.data.message).includes(markdown))
   assert.equal(result.data.meta.requestUrl, url)
   assert.equal(result.data.meta.finalUrl, url + '/final')
   assert.ok(result.data.meta.content.includes(markdown))
   assert.equal(stateOf(ctx, agent).items.S1.fetched.content, result.data.meta.content)
-  const snapshot = textOf(snapshots(adapter.requests.at(-1))[0])
-  assert.ok(!snapshot.includes(markdown))
-  assert.match(snapshot, /Evidence\./)
   assert.ok(JSON.parse(textOf(adapter.extractions[0].messages[0])).content.includes(markdown))
-  assert.match(snapshot, /Search snippet: Preview/)
+  assert.match(textOf(toolEvents[0].data.message), /Search snippet: Preview/)
 })
 
 
-test('direct mode exposes bodies through snapshots, restores JSONL and reuses pages without extraction', async t => {
+test('direct mode exposes bodies through tool results, restores JSONL and reuses pages without extraction', async t => {
   const root = await mkdtemp(join(tmpdir(), 'banso-direct-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const first = await setup(root, true, undefined, undefined, 'direct')
@@ -306,15 +287,14 @@ test('direct mode exposes bodies through snapshots, restores JSONL and reuses pa
     assert.deepEqual(h.errors, [])
     assert.equal(h.adapter.extractions.length, 0)
     const last = h.adapter.requests.at(-1)
-    assert.match(textOf(snapshots(last)[0]), /FULL BODY ONLY/)
-    assert.equal(snapshots(last).length, 1)
+    assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
     assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
-    assert.ok(last.messages.filter(m => m.role === 'tool').every(m => !textOf(m).includes('FULL BODY ONLY')))
   }
   await run(agent, first)
   assert.equal(first.fetchCalls.length, 1)
   const before = structuredClone(stateOf(first.ctx, agent))
   assert.equal(before.items.S1.evidence, undefined)
+  assert.equal(before.items.S1.pageShown, true)
   await first.ctx.fiber.dispose()
   closed = true
   const resumed = await setup(root, true, undefined, undefined, 'direct')
@@ -324,6 +304,8 @@ test('direct mode exposes bodies through snapshots, restores JSONL and reuses pa
   await run(restored, resumed)
   assert.equal(resumed.fetchCalls.length, 0)
   assert.deepEqual(stateOf(resumed.ctx, restored).items.S1.fetched, before.items.S1.fetched)
+  const lastTool = restored.session.snapshotEvents().filter(e => e.type === 'tool/result').at(-1)
+  assert.match(textOf(lastTool.data.message), /Page text for S1 was already returned earlier in this session\./)
 })
 
 
@@ -333,7 +315,6 @@ test('one session switches direct and extract both ways without fetching again',
   const h = await setup(root)
   t.after(() => h.ctx.fiber.dispose())
   const { agent } = await h.ctx.agents.create({ sessionId: SessionId('switch'), agentOptions: { provider: 'mock', model: 'mock' } })
-  let prevSnapshot = ''
   for (const mode of ['direct', 'extract', 'direct', 'extract']) {
     h.adapter.mode = mode
     h.adapter.requests = []
@@ -342,18 +323,18 @@ test('one session switches direct and extract both ways without fetching again',
     await agent.whenIdle()
     assert.deepEqual(h.errors, [])
     assert.equal(h.fetchCalls.length, 1)
-    const text = textOf(snapshots(h.adapter.requests.at(-1))[0])
-    assert.ok(text.startsWith(prevSnapshot))
-    prevSnapshot = text
-    assert.equal(text.split('FULL BODY ONLY').length - 1, 1)
+    const last = h.adapter.requests.at(-1)
+    assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
+    assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
     if (mode === 'extract') {
-      assert.match(text, /Evidence\. Focus:/)
+      assert.match(textOf(last.messages.filter(m => m.role === 'tool').at(-1)), /Evidence\. Focus:/)
     }
   }
   assert.equal(h.adapter.extractions.length, 2)
   const results = agent.session.snapshotEvents().filter(e => e.type === 'tool/result' && e.data.meta?.mode)
   assert.deepEqual(results.map(e => e.data.meta.mode), ['direct', 'extract', 'direct', 'extract'])
   assert.ok(results.slice(1).every(e => e.data.meta.content === undefined))
+  assert.match(textOf(results[2].data.message), /Page text for S1 was already returned earlier in this session\./)
 })
 
 

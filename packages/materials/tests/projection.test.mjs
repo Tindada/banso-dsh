@@ -154,22 +154,24 @@ test('direct read results correlate out of order, save and reuse bodies, and rep
 })
 
 
-test('mixed read modes preserve caches, append entries in result order, and ignore failures', () => {
+test('mixed read modes preserve caches, mark pageShown once, and ignore failures', () => {
   const f = fixture()
   f.result(f.read(), { ...success(), mode: 'extract' })
+  assert.equal(f.state.items.S1.pageShown, undefined)
   const saved = structuredClone(f.state.items.S1)
   const extract = f.read(), direct = f.read()
   f.result(direct, { requestUrl: A, mode: 'direct' })
+  assert.equal(f.state.items.S1.pageShown, true)
   assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
-  const entriesAfterDirect = structuredClone(f.state.entries)
+  const afterDirect = structuredClone(f.state.items.S1)
   f.result(f.read(), { requestUrl: A, mode: 'extract', focus: 'facts', error: 'Extraction failed' })
-  assert.deepEqual(f.state.entries, entriesAfterDirect)
+  assert.deepEqual(f.state.items.S1, afterDirect)
   f.result(f.read(), undefined, { isError: true })
-  assert.deepEqual(f.state.entries, entriesAfterDirect)
+  assert.deepEqual(f.state.items.S1, afterDirect)
   f.result(extract, { requestUrl: A, mode: 'extract', focus: 'facts', evidence: '' })
   assert.deepEqual(f.state.items.S1.fetched, saved.fetched)
   assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
-  assert.deepEqual(f.state.entries, entriesAfterDirect)
+  assert.equal(f.state.items.S1.pageShown, true)
   f.result(f.read(), { requestUrl: A, mode: 'invalid', focus: 'facts', evidence: 'Invalid' })
   assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
   assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
@@ -195,27 +197,18 @@ test('research attempts count independently of results and reset without removin
   assert.equal(f.state.budget.used, 3)
   assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
   const items = structuredClone(f.state.items)
-  const entries = structuredClone(f.state.entries)
   f.emit({ type: 'turn/start', data: { turn: 2 } })
   assert.equal(f.state.budget.used, 0)
   assert.deepEqual(f.state.items, items)
-  assert.deepEqual(f.state.entries, entries)
 })
 
-test('append-only entries record arrival order, deduplicate sources and direct pages, and preserve replay', () => {
+test('direct read sets pageShown only when fetched content exists and preserves replay', () => {
   const f = fixture()
-  f.result(f.call(), search([{ url: A, title: 'First', snippet: 'S1 snippet' }, { url: B, title: 'Second' }]))
-  f.result(f.call(), search([{ url: A, title: 'Updated', snippet: 'New snippet' }]))
+  f.result(f.call('web_read', { target: A, mode: 'direct' }), { requestUrl: A, mode: 'direct', error: 'Fetch failed: HTTP 500' })
+  assert.equal(f.state.items.S1.pageShown, undefined)
   f.result(f.call('web_read', { target: 'S1', mode: 'direct' }), { requestUrl: A, mode: 'direct', ...page })
+  assert.equal(f.state.items.S1.pageShown, true)
   f.result(f.call('web_read', { target: 'S1', mode: 'direct' }), { requestUrl: A, mode: 'direct' })
-  f.result(f.read('S1', 'focus-1'), reused('focus-1'))
-  f.result(f.read('S1', 'focus-2'), { requestUrl: A, mode: 'extract', focus: 'focus-2', evidence: '' })
-  f.result(f.read('S2', 'focus-b'), success(B, 'focus-b'))
-  assert.deepEqual(
-    f.state.entries.map(entry => entry.kind === 'evidence' ? `${entry.kind}:${entry.handle}:${entry.index}` : `${entry.kind}:${entry.handle}`),
-    ['source:S1', 'source:S2', 'fetched:S1', 'page:S1', 'evidence:S1:0', 'fetched:S2', 'evidence:S2:0'],
-  )
-  assert.equal(f.state.entries[0].title, 'First')
-  assert.equal(f.state.entries[0].snippet, 'S1 snippet')
+  assert.equal(f.state.items.S1.pageShown, true)
   assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
 })

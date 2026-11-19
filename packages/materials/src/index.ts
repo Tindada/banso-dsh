@@ -8,8 +8,7 @@ import { registerSearchWrapper } from './tools/search.js'
 import { registerFetchRestriction } from './tools/fetch-policy.js'
 import { registerWebGuidance } from './context/guidance.js'
 import { materialsProjection } from './state/projection.js'
-import { materialsSnapshotProjection } from './state/snapshot.js'
-import { registerMaterialsContext } from './context/context.js'
+import { registerResultRenderer } from './tools/results.js'
 
 export type {
   Material,
@@ -17,13 +16,7 @@ export type {
   FetchedContent,
   Evidence,
   ReadMode,
-  MaterialEntry,
-  SourceEntry,
-  FetchedEntry,
-  PageEntry,
-  EvidenceEntry,
 } from './types.js'
-export type { MaterialsSnapshotState } from './state/snapshot.js'
 export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents', 'tools', 'web', 'llm', 'systemPrompt']
 
@@ -42,11 +35,10 @@ export function apply(ctx: Context, config: Config): void {
     throw new Error('Extraction provider and model must be configured together')
   }
   ctx.sessionProjections.register(materialsProjection)
-  ctx.sessionProjections.register(materialsSnapshotProjection)
   ctx.tools.register(createReadTool(ctx, config))
   registerWebGuidance(ctx)
   registerSearchWrapper(ctx)
   registerFetchRestriction(ctx)
   registerResearchBudget(ctx, config.researchBudget)
-  registerMaterialsContext(ctx)
+  registerResultRenderer(ctx)
 }

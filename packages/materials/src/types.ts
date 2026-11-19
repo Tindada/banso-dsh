@@ -20,6 +20,7 @@ export interface Material {
   snippet?: string | undefined
   publishedAt?: string | undefined
   fetched?: FetchedContent | undefined
+  pageShown?: boolean | undefined
   evidence?: Evidence[] | undefined
 }
 
@@ -29,33 +30,6 @@ export interface PendingCall {
   turn: number
 }
 
-export interface SourceEntry {
-  kind: 'source'
-  handle: string
-  url: string
-  title?: string | undefined
-  snippet?: string | undefined
-  publishedAt?: string | undefined
-}
-
-export interface FetchedEntry {
-  kind: 'fetched'
-  handle: string
-}
-
-export interface PageEntry {
-  kind: 'page'
-  handle: string
-}
-
-export interface EvidenceEntry {
-  kind: 'evidence'
-  handle: string
-  index: number
-}
-
-export type MaterialEntry = SourceEntry | FetchedEntry | PageEntry | EvidenceEntry
-
 /** JSON-only replay state. Treat all values read through stateOf as read-only. */
 export interface MaterialsState {
   budget: { used: number }
@@ -63,7 +37,6 @@ export interface MaterialsState {
   urlIndex: Record<string, string>
   nextHandle: number
   pendingCalls: Record<string, PendingCall>
-  entries: MaterialEntry[]
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
