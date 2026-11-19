@@ -14,9 +14,7 @@ export interface Evidence {
 }
 
 export interface Material {
-  displayMode?: ReadMode | undefined
   handle: string
-  hidden?: boolean | undefined
   url: string
   title?: string | undefined
   snippet?: string | undefined
@@ -26,10 +24,37 @@ export interface Material {
 }
 
 export interface PendingCall {
-  name: 'web_search' | 'web_read' | 'materials_hide'
+  name: 'web_search' | 'web_read'
   callId: string
   turn: number
 }
+
+export interface SourceEntry {
+  kind: 'source'
+  handle: string
+  url: string
+  title?: string | undefined
+  snippet?: string | undefined
+  publishedAt?: string | undefined
+}
+
+export interface FetchedEntry {
+  kind: 'fetched'
+  handle: string
+}
+
+export interface PageEntry {
+  kind: 'page'
+  handle: string
+}
+
+export interface EvidenceEntry {
+  kind: 'evidence'
+  handle: string
+  index: number
+}
+
+export type MaterialEntry = SourceEntry | FetchedEntry | PageEntry | EvidenceEntry
 
 /** JSON-only replay state. Treat all values read through stateOf as read-only. */
 export interface MaterialsState {
@@ -38,6 +63,7 @@ export interface MaterialsState {
   urlIndex: Record<string, string>
   nextHandle: number
   pendingCalls: Record<string, PendingCall>
+  entries: MaterialEntry[]
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {

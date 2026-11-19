@@ -90,7 +90,7 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig, mode = 'ex
   return { ctx, adapter, errors, fetchCalls }
 }
 const snapshots = request => request.messages.filter(message => message.source.kind === 'banso-materials' && message.source.form === 'snapshot')
-const placeholders = request => request.messages.filter(message => message.source.kind === 'banso-materials' && message.source.form === 'placeholder')
+const runtimeContexts = request => request.messages.filter(message => message.source.kind === 'runtime-context')
 const textOf = message => message.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
 const stateOf = (ctx, agent) => ctx.sessionProjections.stateOf(agent.session, 'bansoMaterials')
 
@@ -108,20 +108,21 @@ test('search and read feed materials through metadata, survive JSONL and continu
   const [initial, searched, fetched] = first.adapter.requests
   assert.equal(snapshots(initial).length, 1)
   assert.equal(initial.messages[0].role, 'system')
-  assert.equal(textOf(initial.messages.find(message => message.source.kind === 'user')), 'research')
+  assert.equal(initial.messages[1], snapshots(initial)[0])
+  assert.equal(textOf(initial.messages[2]), 'research')
   assert.equal(snapshots(searched).length, 1)
-  assert.equal(searched.messages.at(-1), snapshots(searched)[0])
+  assert.equal(searched.messages[1], snapshots(searched)[0])
+  assert.ok(textOf(snapshots(searched)[0]).startsWith(textOf(snapshots(initial)[0])))
   assert.match(textOf(snapshots(searched)[0]), /Search snippet: Preview/)
   assert.equal(snapshots(fetched).length, 1)
-  assert.equal(placeholders(fetched).length, 2)
-  assert.equal(fetched.messages.at(-1), snapshots(fetched)[0])
+  assert.equal(fetched.messages[1], snapshots(fetched)[0])
+  assert.ok(textOf(snapshots(fetched)[0]).startsWith(textOf(snapshots(searched)[0])))
   assert.match(textOf(snapshots(fetched)[0]), /Evidence/)
-  assert.doesNotMatch(textOf(placeholders(fetched)[0]), /Preview|Evidence/)
   assert.equal(fetched.messages.filter(message => textOf(message).includes('Evidence.')).length, 1)
   assert.equal(fetched.messages.filter(message => message.role === 'assistant').length, 2)
-  for (const request of first.adapter.requests) {
-    assert.equal(request.messages.filter(message => message.source.kind === 'runtime-context').length, 1)
-  }
+  assert.match(textOf(runtimeContexts(initial).at(-1)), /Research budget: 15\. Attempts used: 0\. Remaining: 15/)
+  assert.match(textOf(runtimeContexts(searched).at(-1)), /Research budget: 15\. Attempts used: 1\. Remaining: 14/)
+  assert.match(textOf(runtimeContexts(fetched).at(-1)), /Research budget: 15\. Attempts used: 2\. Remaining: 13/)
   const toolMessages = first.adapter.requests[2].messages.filter(message => message.role === 'tool')
   assert.match(toolMessages[0].content[0].text, /^Search completed/)
   assert.match(toolMessages[1].content[0].text, /Page fetched/)
@@ -179,10 +180,13 @@ test('search and read feed materials through metadata, survive JSONL and continu
   await restored.whenIdle()
   assert.deepEqual(resumed.errors, [])
   assert.equal(resumed.adapter.requests.length, 3)
-  assert.notEqual(snapshots(resumed.adapter.requests[0])[0].id, locatorBefore.messageId)
-  assert.notEqual(snapshots(resumed.adapter.requests[1])[0].id, locatorBefore.messageId)
+  // Step 0 (new turn, budget reset only) and step 1 (duplicate search) keep the same snapshot message.
+  assert.equal(snapshots(resumed.adapter.requests[0])[0].id, locatorBefore.messageId)
+  assert.equal(snapshots(resumed.adapter.requests[1])[0].id, locatorBefore.messageId)
+  // Step 2 (new follow-up evidence) replaces the fixed slot in place with an appended prefix.
   assert.notEqual(snapshots(resumed.adapter.requests[2])[0].id, locatorBefore.messageId)
-  assert.equal(placeholders(resumed.adapter.requests[2]).length, 5)
+  assert.equal(resumed.adapter.requests[2].messages[1], snapshots(resumed.adapter.requests[2])[0])
+  assert.ok(textOf(snapshots(resumed.adapter.requests[2])[0]).startsWith(textOf(snapshots(resumed.adapter.requests[0])[0])))
   const after = stateOf(resumed.ctx, restored)
   assert.deepEqual(after.urlIndex, before.urlIndex)
   assert.equal(after.nextHandle, before.nextHandle)
@@ -229,7 +233,7 @@ test('single handle and URL calls overlap in the default loop and restore new ha
   assert.match(textOf(results[0].data.message), /S1/)
   assert.doesNotMatch(textOf(results[1].data.message), /S2/)
   assert.match(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Material: S2/)
-  assert.doesNotMatch(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Search snippet: Preview/)
+  assert.match(textOf(snapshots(first.adapter.requests.at(-1))[0]), /Search snippet: Preview/)
 
   const other = (await first.ctx.agents.create({ sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
   const isolated = await first.ctx.tools.execute({ agent: other, name: 'web_read', arguments: { target: 'S1', mode: 'extract', focus: 'facts' }, callId: 'isolated', signal: new AbortController().signal })
@@ -284,7 +288,7 @@ test('Jina Markdown feeds extraction while the material snapshot exposes only ev
   assert.ok(!snapshot.includes(markdown))
   assert.match(snapshot, /Evidence\./)
   assert.ok(JSON.parse(textOf(adapter.extractions[0].messages[0])).content.includes(markdown))
-  assert.doesNotMatch(snapshot, /Search snippet: Preview/)
+  assert.match(snapshot, /Search snippet: Preview/)
 })
 
 
@@ -329,6 +333,7 @@ test('one session switches direct and extract both ways without fetching again',
   const h = await setup(root)
   t.after(() => h.ctx.fiber.dispose())
   const { agent } = await h.ctx.agents.create({ sessionId: SessionId('switch'), agentOptions: { provider: 'mock', model: 'mock' } })
+  let prevSnapshot = ''
   for (const mode of ['direct', 'extract', 'direct', 'extract']) {
     h.adapter.mode = mode
     h.adapter.requests = []
@@ -337,14 +342,12 @@ test('one session switches direct and extract both ways without fetching again',
     await agent.whenIdle()
     assert.deepEqual(h.errors, [])
     assert.equal(h.fetchCalls.length, 1)
-    assert.equal(stateOf(h.ctx, agent).items.S1.displayMode, mode)
     const text = textOf(snapshots(h.adapter.requests.at(-1))[0])
-    if (mode === 'direct') {
-      assert.match(text, /FULL BODY ONLY/)
-      assert.doesNotMatch(text, /Evidence\. Focus:/)
-    } else {
+    assert.ok(text.startsWith(prevSnapshot))
+    prevSnapshot = text
+    assert.equal(text.split('FULL BODY ONLY').length - 1, 1)
+    if (mode === 'extract') {
       assert.match(text, /Evidence\. Focus:/)
-      assert.doesNotMatch(text, /FULL BODY ONLY/)
     }
   }
   assert.equal(h.adapter.extractions.length, 2)
@@ -407,8 +410,8 @@ test('shared research budget admits only the first call and resets on the next t
   }
   assert.equal(stateOf(h.ctx, agent).budget.used, 4)
   assert.ok(h.adapter.requests[0].tools.some(tool => tool.name === 'web_read'))
-  assert.ok(h.adapter.requests[1].tools.every(tool => !['web_read', 'web_search'].includes(tool.name)))
-  assert.match(textOf(snapshots(h.adapter.requests[2])[0]), /Attempts used: 4\. Remaining: 0/)
+  assert.ok((h.adapter.requests[1].tools ?? []).every(tool => !['web_read', 'web_search'].includes(tool.name)))
+  assert.match(textOf(runtimeContexts(h.adapter.requests[2]).at(-1)), /Attempts used: 4\. Remaining: 0/)
   const items = structuredClone(stateOf(h.ctx, agent).items)
   agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'followup' }] }))
   await agent.whenIdle()

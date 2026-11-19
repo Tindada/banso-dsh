@@ -24,6 +24,8 @@ async function setup(t, limit) {
   const other = await ctx.agentLoop.create(SessionId('other'))
   const state = () => ctx.sessionProjections.stateOf(agent.session, 'bansoMaterials')
   const names = async target => (await ctx.systemPrompt.assemble({ agent: target, scope: target })).tools.map(tool => tool.name)
+  const budgetContext = async target => (await ctx.systemPrompt.assemble({ agent: target, scope: target }))
+    .contexts.find(entry => entry.name === 'banso:research-budget')
   let n = 0
   const call = (target = agent) => {
     const callId = `call-${++n}`
@@ -31,7 +33,7 @@ async function setup(t, limit) {
     return callId
   }
   const execute = (callId, target = agent) => ctx.tools.execute({ agent: target, callId, name: 'web_read', arguments: { target: 'S999', mode: 'direct' }, signal: new AbortController().signal })
-  return { ctx, fiber, agent, other, state, names, call, execute }
+  return { ctx, fiber, agent, other, state, names, budgetContext, call, execute }
 }
 
 test('configuration accepts zero and safe integer limits and defaults to 15', () => {
@@ -45,26 +47,33 @@ test('configuration accepts zero and safe integer limits and defaults to 15', ()
 test('zero budget hides both tools and guards calls', async t => {
   const h = await setup(t, 0)
   assert.ok((await h.names(h.agent)).every(name => !['web_search', 'web_read'].includes(name)))
+  assert.match((await h.budgetContext(h.agent)).text, /Research budget: 0\. Attempts used: 0\. Remaining: 0/)
   const result = await h.execute(h.call())
   assert.match(result.error.message, /Research budget exhausted/)
   assert.equal(h.state().budget.used, 1)
+  assert.match((await h.budgetContext(h.agent)).text, /Research budget: 0\. Attempts used: 1\. Remaining: 0/)
   const noAgent = await h.ctx.tools.execute({ callId: 'no-agent', name: 'web_read', arguments: { target: 'S1', mode: 'direct' }, signal: new AbortController().signal })
   assert.match(noAgent.error.message, /require an agent/)
 })
 
 test('budget is session-local and filters and guards disappear on plugin disposal', async t => {
   const h = await setup(t, 1)
+  assert.match((await h.budgetContext(h.agent)).text, /Research budget: 1\. Attempts used: 0\. Remaining: 1/)
   const id = h.call()
   assert.doesNotMatch((await h.execute(id)).error.message, /budget exhausted/)
   assert.ok(!(await h.names(h.agent)).includes('web_search'))
   assert.ok((await h.names(h.other)).includes('web_search'))
-  assert.ok((await h.names(h.agent)).includes('materials_hide'))
+  assert.ok(!(await h.names(h.agent)).includes('materials_hide'))
+  assert.match((await h.budgetContext(h.agent)).text, /Research budget: 1\. Attempts used: 1\. Remaining: 0/)
+  assert.match((await h.budgetContext(h.other)).text, /Research budget: 1\. Attempts used: 0\. Remaining: 1/)
   assert.match((await h.execute(h.call())).error.message, /budget exhausted/)
   await h.fiber.dispose()
   assert.ok((await h.names(h.agent)).includes('web_search'))
+  assert.equal(await h.budgetContext(h.agent), undefined)
   const result = await h.ctx.tools.execute({ agent: h.agent, name: 'web_search', arguments: { queries: ['test'] }, callId: 'disposed', signal: new AbortController().signal })
   assert.doesNotMatch(result.error?.message ?? '', /budget exhausted/)
   await h.ctx.plugin(Materials, { researchBudget: 1 })
   assert.equal(h.state().budget.used, 2)
   assert.ok(!(await h.names(h.agent)).includes('web_search'))
+  assert.match((await h.budgetContext(h.agent)).text, /Research budget: 1\. Attempts used: 2\. Remaining: 0/)
 })

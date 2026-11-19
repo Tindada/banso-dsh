@@ -14,6 +14,17 @@ export function registerResearchBudget(ctx: Context, limit: number): void {
     if (state === undefined) throw new Error('Materials projection is not registered')
     return state.budget.used
   }
+  ctx.systemPrompt.context({
+    name: 'banso:research-budget',
+    order: 300,
+    required: true,
+    interpolate: false,
+    text: ({ agent }) => {
+      if (agent === undefined) return ''
+      const attempts = used(agent)
+      return `Research budget: ${limit}. Attempts used: ${attempts}. Remaining: ${Math.max(0, limit - attempts)}.\nEach web_search or web_read call attempt counts once, including failed or rejected attempts.`
+    },
+  })
   ctx.on('system-prompt/assemble', async (_assembly, { agent }, next) => {
     const assembly = await next()
     if (agent === undefined || used(agent) < limit) return assembly

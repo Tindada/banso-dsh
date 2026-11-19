@@ -2,7 +2,7 @@ import { isResearchTool } from '../budget.js'
 import { z } from 'zod'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import type { Material, MaterialsState, PendingCall } from '../types.js'
+import type { Material, MaterialEntry, MaterialsState, PendingCall } from '../types.js'
 
 const urlSchema = z.string().refine(value => {
   try {
@@ -46,12 +46,6 @@ const fetchedSchema = z.object({
   time: z.number(),
 })
 
-const hideMetaSchema = z.object({
-  hidden: z.array(z.string()),
-  alreadyHidden: z.array(z.string()),
-  unknown: z.array(z.string()),
-})
-
 const evidenceSchema = z.object({
   focus: z.string(),
   text: z.string(),
@@ -60,11 +54,37 @@ const evidenceSchema = z.object({
 
 const materialSchema = sourceSchema.extend({
   handle: z.string(),
-  displayMode: z.enum(['direct', 'extract']).optional(),
-  hidden: z.boolean().optional(),
   fetched: fetchedSchema.optional(),
   evidence: z.array(evidenceSchema).optional(),
 })
+
+const sourceEntrySchema = sourceSchema.extend({
+  kind: z.literal('source'),
+  handle: z.string(),
+})
+
+const fetchedEntrySchema = z.object({
+  kind: z.literal('fetched'),
+  handle: z.string(),
+})
+
+const pageEntrySchema = z.object({
+  kind: z.literal('page'),
+  handle: z.string(),
+})
+
+const evidenceEntrySchema = z.object({
+  kind: z.literal('evidence'),
+  handle: z.string(),
+  index: z.number().int().nonnegative(),
+})
+
+const entrySchema: z.ZodType<MaterialEntry> = z.discriminatedUnion('kind', [
+  sourceEntrySchema,
+  fetchedEntrySchema,
+  pageEntrySchema,
+  evidenceEntrySchema,
+])
 
 const stateSchema: z.ZodType<MaterialsState> = z.object({
   budget: z.object({ used: z.number().int().nonnegative() }),
@@ -74,26 +94,35 @@ const stateSchema: z.ZodType<MaterialsState> = z.object({
   pendingCalls: z.record(
     z.string(),
     z.object({
-      name: z.enum(['web_search', 'web_read', 'materials_hide']),
+      name: z.enum(['web_search', 'web_read']),
       callId: z.string(),
       turn: z.number().int(),
     }),
   ),
+  entries: z.array(entrySchema),
 })
 
 function trackCall(event: SessionEvent<'tool/call'>): PendingCall | undefined {
   const { name, callId, turn } = event.data
-  if (name !== 'web_search' && name !== 'web_read' && name !== 'materials_hide') return undefined
+  if (name !== 'web_search' && name !== 'web_read') return undefined
 
   return { name, callId, turn }
 }
 
 /** Updates only detached containers; existing records remain immutable. */
-function upsert(state: MaterialsState, url: string, update: (item: Material) => Material): void {
-  const handle = Object.hasOwn(state.urlIndex, url) ? state.urlIndex[url]! : `S${state.nextHandle++}`
+function upsert(
+  state: MaterialsState,
+  url: string,
+  update: (item: Material) => Material,
+): { handle: string; previous: Material | undefined; item: Material } {
+  const existing = Object.hasOwn(state.urlIndex, url) ? state.urlIndex[url]! : undefined
+  const handle = existing ?? `S${state.nextHandle++}`
+  const previous = existing === undefined ? undefined : state.items[handle]
 
   state.urlIndex[url] = handle
-  state.items[handle] = update(state.items[handle] ?? { handle, url })
+  const item = update(previous ?? { handle, url })
+  state.items[handle] = item
+  return { handle, previous, item }
 }
 
 export function applyMaterials(state: MaterialsState, event: SessionEvent): MaterialsState {
@@ -135,6 +164,7 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     pendingCalls,
     items: { ...state.items },
     urlIndex: { ...state.urlIndex },
+    entries: [...state.entries],
   }
   if (call.name === 'web_search') {
     if (event.data.message.isError) return next
@@ -142,7 +172,17 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     if (!parsed.success) return next
 
     for (const source of parsed.data.sources) {
-      upsert(next, source.url, item => ({ ...item, ...source, hidden: false }))
+      const { handle, previous } = upsert(next, source.url, item => ({ ...item, ...source }))
+      if (previous === undefined) {
+        next.entries.push({
+          kind: 'source',
+          handle,
+          url: source.url,
+          ...(source.title !== undefined ? { title: source.title } : {}),
+          ...(source.snippet !== undefined ? { snippet: source.snippet } : {}),
+          ...(source.publishedAt !== undefined ? { publishedAt: source.publishedAt } : {}),
+        })
+      }
     }
     return next
   }
@@ -155,35 +195,44 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
     const { requestUrl, content, finalUrl, truncated, mode } = parsed.data
     const evidenceGroup = mode === 'extract' ? parsed.data : undefined
     if (content !== undefined && (finalUrl === undefined || truncated === undefined)) return next
-    upsert(next, requestUrl, item => {
-      const visible = { ...item, hidden: false }
-      const updated = content !== undefined
+    const { handle, previous, item: saved } = upsert(next, requestUrl, item => {
+      const updated = item.fetched === undefined && content !== undefined
         ? {
-            ...visible,
+            ...item,
             fetched: { content, finalUrl: finalUrl!, truncated: truncated!, time: event.time },
           }
-        : visible
+        : item
       if (parsed.data.error !== undefined) return updated
-      // A reused page must already exist; empty evidence is still a successful read.
-      const succeeded = mode === 'direct' ? updated.fetched !== undefined : evidenceGroup?.evidence !== undefined
-      const displayed = succeeded ? { ...updated, displayMode: mode } : updated
-      if (!evidenceGroup?.evidence?.trim()) return displayed
+      if (!evidenceGroup?.evidence?.trim()) return updated
       return {
-        ...displayed,
+        ...updated,
         evidence: [
           ...item.evidence ?? [],
           { focus: evidenceGroup.focus!, text: evidenceGroup.evidence, time: event.time },
         ],
       }
     })
-  }
-  if (call.name === 'materials_hide') {
-    if (event.data.message.isError) return next
-    const parsed = hideMetaSchema.safeParse(event.data.meta)
-    if (!parsed.success) return next
-    for (const handle of parsed.data.hidden) {
-      const item = Object.hasOwn(next.items, handle) ? next.items[handle] : undefined
-      if (item !== undefined && item.hidden !== true) next.items[handle] = { ...item, hidden: true }
+    if (previous === undefined) {
+      next.entries.push({ kind: 'source', handle, url: requestUrl })
+    }
+    if (previous?.fetched === undefined && saved.fetched !== undefined) {
+      next.entries.push({ kind: 'fetched', handle })
+    }
+    if (parsed.data.error === undefined) {
+      if (
+        mode === 'direct'
+        && saved.fetched !== undefined
+        && !next.entries.some(entry => entry.kind === 'page' && entry.handle === handle)
+      ) {
+        next.entries.push({ kind: 'page', handle })
+      }
+      if (mode === 'extract' && evidenceGroup?.evidence?.trim()) {
+        next.entries.push({
+          kind: 'evidence',
+          handle,
+          index: saved.evidence!.length - 1,
+        })
+      }
     }
   }
   return next
@@ -192,8 +241,8 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
 // Derived index over existing tool facts, not a new whole-state event domain.
 export const materialsProjection: ProjectionDefinition<'bansoMaterials'> = {
   key: 'bansoMaterials',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema,
-  init: () => ({ budget: { used: 0 }, items: {}, urlIndex: {}, nextHandle: 1, pendingCalls: {} }),
+  init: () => ({ budget: { used: 0 }, items: {}, urlIndex: {}, nextHandle: 1, pendingCalls: {}, entries: [] }),
   apply: applyMaterials,
 }

@@ -117,7 +117,6 @@ test('Banso bundle composes with official Web and runs scoped research without c
           ['web_search', { queries: ['research'] }],
           ['web_read', { target: 'S1', mode: 'direct' }],
           ['web_read', { target: 'S1', mode: 'extract', focus: 'facts' }],
-          ['materials_hide', { handles: ['S1'] }],
         ]
         if (steps[results.length]) {
           const [name, args] = steps[results.length], id = `call-${results.length}`, argumentsText = JSON.stringify(args)
@@ -147,21 +146,30 @@ test('Banso bundle composes with official Web and runs scoped research without c
   const banso = await create('banso')
   await ask(banso, 'research')
   assert.deepEqual(errors, [])
-  assert.equal(model.requests.length, 5)
+  assert.equal(model.requests.length, 4)
   for (const request of model.requests) {
-    assert.deepEqual(request.tools.map(tool => tool.name).sort(), ['materials_hide', 'web_read', 'web_search', 'working_directory'])
+    assert.deepEqual(request.tools.map(tool => tool.name).sort(), ['web_read', 'web_search', 'working_directory'])
     const content = JSON.stringify(request.messages)
     assert.match(content, /You are Banso/)
     assert.match(content, /RESEARCH RULE FIXTURE/)
     assert.match(content, /Research reference time \(UTC\): \d{4}-/)
     assert.doesNotMatch(content, /HOST IDENTITY/)
+    assert.equal(request.messages[0].role, 'system')
+    assert.equal(request.messages[1].source.kind, 'banso-materials')
   }
-  assert.match(snapshot(model.requests[1]), /Search snippet/)
-  assert.match(snapshot(model.requests[0]), /Research budget: 15/)
-  assert.match(snapshot(model.requests[2]), /FULL PAGE BODY/)
-  assert.match(snapshot(model.requests[3]), /EXTRACTED EVIDENCE/)
-  assert.doesNotMatch(snapshot(model.requests[3]), /FULL PAGE BODY/)
-  assert.doesNotMatch(snapshot(model.requests[4]), /Material: S1/)
+  const s0 = snapshot(model.requests[0])
+  const s1 = snapshot(model.requests[1])
+  const s2 = snapshot(model.requests[2])
+  const s3 = snapshot(model.requests[3])
+  assert.doesNotMatch(s0, /Research budget:/)
+  assert.match(textOf(model.requests[0].messages.findLast(m => m.source.kind === 'runtime-context')), /Research budget: 15/)
+  assert.ok(s1.startsWith(s0))
+  assert.match(s1, /Search snippet/)
+  assert.ok(s2.startsWith(s1))
+  assert.match(s2, /FULL PAGE BODY/)
+  assert.ok(s3.startsWith(s2))
+  assert.match(s3, /EXTRACTED EVIDENCE/)
+  assert.match(s3, /FULL PAGE BODY/)
   assert.equal(model.extractions, 1)
   assert.equal(records.length, 1)
   assert.equal(records[0].fetches, 1)

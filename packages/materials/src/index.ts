@@ -10,9 +10,19 @@ import { registerWebGuidance } from './context/guidance.js'
 import { materialsProjection } from './state/projection.js'
 import { materialsSnapshotProjection } from './state/snapshot.js'
 import { registerMaterialsContext } from './context/context.js'
-import { createHideTool } from './tools/hide.js'
 
-export type { Material, MaterialsState, FetchedContent, Evidence, ReadMode } from './types.js'
+export type {
+  Material,
+  MaterialsState,
+  FetchedContent,
+  Evidence,
+  ReadMode,
+  MaterialEntry,
+  SourceEntry,
+  FetchedEntry,
+  PageEntry,
+  EvidenceEntry,
+} from './types.js'
 export type { MaterialsSnapshotState } from './state/snapshot.js'
 export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents', 'tools', 'web', 'llm', 'systemPrompt']
@@ -33,11 +43,10 @@ export function apply(ctx: Context, config: Config): void {
   }
   ctx.sessionProjections.register(materialsProjection)
   ctx.sessionProjections.register(materialsSnapshotProjection)
-  ctx.tools.register(createHideTool(ctx))
   ctx.tools.register(createReadTool(ctx, config))
   registerWebGuidance(ctx)
   registerSearchWrapper(ctx)
   registerFetchRestriction(ctx)
   registerResearchBudget(ctx, config.researchBudget)
-  registerMaterialsContext(ctx, config.researchBudget)
+  registerMaterialsContext(ctx)
 }

@@ -6,7 +6,7 @@ export type MaterialsSnapshotState = { messageId: string; seq: SessionSeq } | nu
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'banso-materials': { kind: 'banso-materials'; form: 'snapshot' | 'placeholder' }
+    'banso-materials': { kind: 'banso-materials'; form: 'snapshot' }
   }
 }
 
@@ -25,11 +25,6 @@ export const materialsSnapshotProjection: ProjectionDefinition<'bansoMaterialsSn
   apply: (state, event) => {
     if (event.type !== 'user/message' || event.data.source.kind !== 'banso-materials') return state
     if (event.data.source.form === 'snapshot') return { messageId: event.data.id, seq: event.seq }
-    if (
-      event.data.source.form === 'placeholder'
-      && state !== null
-      && event.sourceEventSeqs?.includes(state.seq)
-    ) return null
     return state
   },
 }
