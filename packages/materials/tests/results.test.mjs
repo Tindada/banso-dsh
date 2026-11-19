@@ -219,16 +219,17 @@ test('tool results append strictly at the tail without snapshot messages, keep s
       assert.deepEqual(currIds.slice(0, prevIds.length), prevIds)
     }
   }
-  assert.match(textOf(runtimeContexts(h.adapter.requests[0].messages).at(-1)), /Research budget: 15\. Attempts used: 0\. Remaining: 15/)
+  assert.equal(runtimeContexts(h.adapter.requests.at(-1).messages).length, 0)
+  assert.match(textOf(h.adapter.requests[0].messages[0]), /Research budget: 15 attempts per turn/)
 
   const toolMessages = h.adapter.requests.at(-1).messages.filter(m => m.role === 'tool')
   assert.equal(toolMessages.length, 5)
-  assert.match(textOf(toolMessages[0]), /Material: S1[\s\S]*Snippet A1[\s\S]*Material: S2[\s\S]*Snippet B/)
-  assert.match(textOf(toolMessages[1]), /Material: S1 \(existing\)[\s\S]*Snippet A2 \(new query\)/)
-  assert.match(textOf(toolMessages[2]), /Material: S1[\s\S]*Page fetched\.[\s\S]*Evidence focus: focus-1[\s\S]*提取证据/)
+  assert.match(textOf(toolMessages[0]), /Material: S1[\s\S]*Snippet A1[\s\S]*Material: S2[\s\S]*Snippet B[\s\S]*Research budget: 15\. Attempts used: 1\. Remaining: 14\./)
+  assert.match(textOf(toolMessages[1]), /Material: S1 \(existing\)[\s\S]*Snippet A2 \(new query\)[\s\S]*Research budget: 15\. Attempts used: 2\. Remaining: 13\./)
+  assert.match(textOf(toolMessages[2]), /Material: S1[\s\S]*Page fetched\.[\s\S]*Evidence focus: focus-1[\s\S]*提取证据[\s\S]*Research budget: 15\. Attempts used: 3\. Remaining: 12\./)
   assert.doesNotMatch(textOf(toolMessages[2]), /正文完整保留/)
-  assert.match(textOf(toolMessages[3]), /Material: S1[\s\S]*Saved page reused\.[\s\S]*Page text:[\s\S]*正文完整保留/)
-  assert.match(textOf(toolMessages[4]), /Page text for S1 was already returned earlier in this session\./)
+  assert.match(textOf(toolMessages[3]), /Material: S1[\s\S]*Saved page reused\.[\s\S]*Page text:[\s\S]*正文完整保留[\s\S]*Research budget: 15\. Attempts used: 4\. Remaining: 11\./)
+  assert.match(textOf(toolMessages[4]), /Page text for S1 was already returned earlier in this session\.[\s\S]*Research budget: 15\. Attempts used: 5\. Remaining: 10\./)
   assert.doesNotMatch(textOf(toolMessages[4]), /正文完整保留/)
 })
 
