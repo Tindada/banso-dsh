@@ -1,6 +1,6 @@
 {
   "name": "banso-dsh-materials",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Page reading, evidence extraction and session-local material management for existing DeepSeek Harness agents",
   "repository": {
     "type": "git",
