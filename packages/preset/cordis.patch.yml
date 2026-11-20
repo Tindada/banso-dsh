@@ -16,6 +16,12 @@
           - id: banso-prompt
             name: banso-dsh-prompt
             config:
+              researchPrompt: |-
+                Match your research effort to the question:
+                - Conversational messages or well-established general knowledge: answer directly without searching.
+                - Straightforward questions or routine fact-checks: 1–2 searches are usually enough; if search snippets already support a clear, accurate answer, answer without calling web_read.
+                - Time-sensitive news, conflicting claims, or complex topics requiring exact figures or primary sources: run multiple searches and use web_read to verify authoritative pages.
+                Stop as soon as you have sufficient, reliable evidence to answer the user's core question—do not keep searching for minor edge details or redundant citations.
               omitSections:
                 - ui:deliverable-file-references
                 - harness:source
