@@ -31,6 +31,7 @@ dsh --profile web
 ## 行为与配置
 
 - 使用 Banso 研究身份、`banso-dsh-prompt` 和每轮 UTC 参考时间。当前 prompt 插件默认研究规则正文为空；可通过 `researchPrompt` 配置补充规则。materials 自带材料使用与来源引用指导。
+- 默认在 `banso` 作用域内过滤官方 Web 宿主注入的编码与自举开发提示（`ui:deliverable-file-references`、`harness:source`、`app:web-surface`）以及可选的宿主运行时上下文（`sandbox:policy`、`approval:policy`、`harness:source`、`app:web-surface`），不影响其他 preset；框架标为 `required` 的 `working-directory:current` 仍按宿主契约保留。
 - `web_search` 搜索超时预算为 60 秒；`web_read` 支持 direct/extract、正文复用及材料隐藏。每轮搜索与阅读共享默认 15 次尝试预算。
 - 模型、`web` 服务及 provider 配置均继承宿主。
 

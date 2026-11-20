@@ -15,6 +15,16 @@
               includeRuntimeContext: true
           - id: banso-prompt
             name: banso-dsh-prompt
+            config:
+              omitSections:
+                - ui:deliverable-file-references
+                - harness:source
+                - app:web-surface
+              omitContexts:
+                - sandbox:policy
+                - approval:policy
+                - harness:source
+                - app:web-surface
           # Research tools inherit the host web service and its provider selection.
           - id: tool-web
             name: '@deepseek-ai/dsh-tool-web'

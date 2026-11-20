@@ -175,3 +175,32 @@ test('agents are isolated and plugin disposal removes registrations and listener
   await first.whenIdle()
   assert.match(textOf(snapshots(adapter.requests.at(-1)).at(-1)), new RegExp(T2, 'u'))
 })
+
+test('omitSections and omitContexts filter configured host entries and restore on disposal', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(T1) })
+  const { ctx, fiber, adapter, create } = await harness(t, {
+    omitSections: ['host:drop', 'host:missing'],
+    omitContexts: ['host:ctx-drop', 'host:ctx-missing'],
+  })
+  ctx.systemPrompt.section({ name: 'host:drop', order: 100, text: 'DROP SECTION' })
+  ctx.systemPrompt.section({ name: 'host:keep', order: 101, text: 'KEEP SECTION' })
+  ctx.systemPrompt.context({ name: 'host:ctx-drop', order: 100, text: 'DROP CONTEXT' })
+  ctx.systemPrompt.context({ name: 'host:ctx-keep', order: 101, text: 'KEEP CONTEXT' })
+
+  const agent = await create('omit-filter')
+  agent.followup(message('研究'))
+  await agent.whenIdle()
+  const request = adapter.requests[0]
+  const system = textOf(request.messages.find(msg => msg.role === 'system'))
+  const runtime = textOf(request.messages.find(msg => msg.source?.kind === 'runtime-context'))
+  assert.doesNotMatch(system, /DROP SECTION/)
+  assert.match(system, /KEEP SECTION/)
+  assert.doesNotMatch(runtime, /DROP CONTEXT/)
+  assert.match(runtime, /KEEP CONTEXT/)
+  assert.match(runtime, new RegExp(T1, 'u'))
+
+  await fiber.dispose()
+  const afterDispose = await ctx.systemPrompt.assemble({ agent, scope: agent })
+  assert.match(renderPrompt(afterDispose), /DROP SECTION/)
+  assert.match(renderContextSnapshot(afterDispose), /DROP CONTEXT/)
+})

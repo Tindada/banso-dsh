@@ -4,16 +4,21 @@
 
 - `banso:research` section：通过 `researchPrompt` 配置研究规则，当前默认正文为空；工具操作协议及材料指导由 [资料插件](https://github.com/Tindada/banso-dsh/blob/main/packages/materials/README.md) 提供。
 - `banso:reference-time` context：本轮开始处理输入时的 UTC 时间。需要 `includeRuntimeContext: true`；Banso bundle 已开启。
+- 可选过滤：`omitSections` 与 `omitContexts` 按名称移除指定宿主 section 和 runtime-context，默认均为空数组，仅作用于插件所在作用域。
 
 ## 配置
 
-可在 profile patch 中完整替换研究规则；未设置 `researchPrompt` 时使用内置提示词。文本按字面使用，不展开 `{{变量}}`。显式空字符串会移除本插件的研究规则，但不影响参考时间、身份描述和其他插件的提示词。
+可在 profile patch 中完整替换研究规则；未设置 `researchPrompt` 时使用内置提示词。文本按字面使用，不展开 `{{变量}}`。显式空字符串会移除本插件的研究规则，但不影响参考时间、身份描述和其他插件的提示词。需要过滤宿主注入的提示词或运行时上下文时，可配置 `omitSections` 和 `omitContexts`。
 
 ```yaml
 - id: banso-prompt
   config:
     researchPrompt: |-
       Your custom research instructions...
+    omitSections:
+      - harness:source
+    omitContexts:
+      - harness:source
 ```
 
 这是运行环境级配置，不是 SDK 每题参数。修改后重启运行环境。身份描述仍通过 `system-prompt` 的 `personaPrefix` 配置。

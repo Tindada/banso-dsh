@@ -83,13 +83,21 @@ test('Banso bundle composes with official Web and runs scoped research without c
     } })
   } }
   await ctx.plugin(providers)
+  ctx.systemPrompt.section({ name: 'ui:deliverable-file-references', order: 9000, text: 'HOST DELIVERABLE GUIDANCE' })
+  ctx.systemPrompt.section({ name: 'harness:source', order: 10000, text: 'HOST CHECKOUT GUIDANCE' })
+  ctx.systemPrompt.section({ name: 'app:web-surface', order: 10100, text: 'HOST WEB SURFACE GUIDANCE' })
+  ctx.systemPrompt.context({ name: 'sandbox:policy', order: 110, text: 'HOST SANDBOX POLICY' })
+  ctx.systemPrompt.context({ name: 'approval:policy', order: 115, text: 'HOST APPROVAL POLICY' })
+  ctx.systemPrompt.context({ name: 'harness:source', order: 200, text: 'HOST CHECKOUT PATH' })
+  ctx.systemPrompt.context({ name: 'app:web-surface', order: 210, text: 'HOST WEB GUI URL' })
   await ctx.plugin((await fromDsh('@deepseek-ai/dsh-agent-preset-registry')).default, { default: 'standard' })
   const declaration = composeEntries([loadOptionalPatches('test', join(packageDir, 'cordis.patch.yml'))])[0]
   assert.deepEqual(declaration.config.plugins.map(row => row.id), ['persona', 'banso-prompt', 'tool-web', 'banso-materials'])
   assert.equal(declaration.config.plugins.find(row => row.id === 'tool-web').config.searchTimeoutMs, 60000)
   assert.equal(entries.filter(row => row.id === 'web' && !row.disabled).length, 1)
   assert.equal(entries.filter(row => row.id === 'web-deepseek-api' && !row.disabled).length, 1)
-  declaration.config.plugins.find(row => row.id === 'banso-prompt').config = { researchPrompt: 'RESEARCH RULE FIXTURE' }
+  const bansoPromptRow = declaration.config.plugins.find(row => row.id === 'banso-prompt')
+  bansoPromptRow.config = { ...bansoPromptRow.config, researchPrompt: 'RESEARCH RULE FIXTURE' }
   await ctx.loader.root.update([
     { id: 'preset-standard', name: '@deepseek-ai/dsh-agent-preset', config: { id: 'standard', plugins: [
       { id: 'tool-web', name: '@deepseek-ai/dsh-tool-web', config: { fetch: true } },
@@ -153,6 +161,9 @@ test('Banso bundle composes with official Web and runs scoped research without c
     assert.match(content, /RESEARCH RULE FIXTURE/)
     assert.match(content, /Research reference time \(UTC\): \d{4}-/)
     assert.doesNotMatch(content, /HOST IDENTITY/)
+    assert.doesNotMatch(content, /HOST DELIVERABLE GUIDANCE|HOST CHECKOUT GUIDANCE|HOST WEB SURFACE GUIDANCE/)
+    assert.doesNotMatch(content, /HOST SANDBOX POLICY|HOST APPROVAL POLICY|HOST CHECKOUT PATH|HOST WEB GUI URL/)
+    assert.match(content, /Current working directory:/)
     assert.equal(request.messages[0].role, 'system')
     assert.equal(request.messages[1].source.kind, 'user')
     assert.ok(!request.messages.some(m => m.source.kind === 'banso-materials'))
@@ -174,6 +185,14 @@ test('Banso bundle composes with official Web and runs scoped research without c
   assert.deepEqual(errors, [])
   const last = model.requests.at(-1)
   assert.match(JSON.stringify(last.messages), /HOST IDENTITY/)
+  assert.match(JSON.stringify(last.messages), /HOST DELIVERABLE GUIDANCE/)
+  assert.match(JSON.stringify(last.messages), /HOST CHECKOUT GUIDANCE/)
+  assert.match(JSON.stringify(last.messages), /HOST WEB SURFACE GUIDANCE/)
+  assert.match(JSON.stringify(last.messages), /Current working directory:/)
+  assert.match(JSON.stringify(last.messages), /HOST SANDBOX POLICY/)
+  assert.match(JSON.stringify(last.messages), /HOST APPROVAL POLICY/)
+  assert.match(JSON.stringify(last.messages), /HOST CHECKOUT PATH/)
+  assert.match(JSON.stringify(last.messages), /HOST WEB GUI URL/)
   assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
   assert.match(textOf(last.messages.find(m => m.role === 'tool')), /Search snippet/)
   assert.match(textOf(last.messages.findLast(m => m.role === 'tool')), /FULL PAGE BODY/)
