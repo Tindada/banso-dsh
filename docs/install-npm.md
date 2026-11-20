@@ -5,8 +5,8 @@
 准备 **Node.js 24、pnpm 和 DeepSeek API key**。在工作目录安装 DSH 和 Banso preset：
 
 ```sh
-pnpm add @deepseek-ai/dsh@0.2.1-rc.2
-pnpm exec dsh plugin --profile web add banso-dsh-preset@0.1.1
+pnpm add @deepseek-ai/dsh@0.2.2-rc.5
+pnpm exec dsh plugin --profile web add banso-dsh-preset@0.1.3
 ```
 
 在该目录创建 `.env`（也可复制已有配置）：
@@ -35,7 +35,7 @@ pnpm exec dsh --profile web
 mkdir banso-demo
 cd banso-demo
 
-pnpm add @deepseek-ai/dsh@0.2.0-rc.2
+pnpm add @deepseek-ai/dsh@0.2.2-rc.5
 ```
 
 批准工作目录中 DSH 依赖的构建，在交互列表中用空格选择提示的依赖，回车确认：
@@ -47,7 +47,7 @@ pnpm approve-builds
 构建完成后安装 Banso：
 
 ```bash
-pnpm exec dsh plugin --profile banso-dsh add banso-dsh@0.1.1
+pnpm exec dsh plugin --profile banso-dsh add banso-dsh@0.1.3
 ```
 
 只需安装入口包，其他 Banso 插件自动安装。profile 是独立的依赖目录，还需在其中批准 `koffi` 构建：

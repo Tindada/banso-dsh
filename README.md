@@ -8,7 +8,7 @@
 
 ### 使用 Banso 网页研究助手
 
-1. 打开插件管理页，选择“添加插件”，输入 `banso-dsh-preset@0.1.1`。
+1. 打开插件管理页，选择“添加插件”，输入 `banso-dsh-preset@0.1.3`。
 2. 安装完成后，点击“立即启用”。
 3. 新建任务，选择 **Banso** 和模型，即可开始研究。
 
@@ -17,7 +17,7 @@ Banso 使用已有 DSH 环境中的模型、搜索和网页抓取服务，请先
 也可以通过命令行安装到 `web` profile，再启动 Web：
 
 ```sh
-dsh plugin --profile web add banso-dsh-preset@0.1.1
+dsh plugin --profile web add banso-dsh-preset@0.1.3
 dsh --profile web
 ```
 
@@ -25,7 +25,7 @@ dsh --profile web
 
 ### 为已有 agent 添加资料管理能力
 
-如果希望继续使用现有 agent，可在插件管理页安装并启用 `banso-dsh-materials@0.1.4`，然后新建任务。它提供网页阅读、证据提取，以及面向模型的会话内资料管理，让模型在后续追问中复用已获取的资料。宿主要求与工具变化见 [Materials 说明](packages/materials/README.md)。
+如果希望继续使用现有 agent，可在插件管理页安装并启用 `banso-dsh-materials@0.1.6`，然后新建任务。它提供网页阅读、证据提取，以及面向模型的会话内资料管理，让模型在后续追问中复用已获取的资料。宿主要求与工具变化见 [Materials 说明](packages/materials/README.md)。
 
 **Banso preset 已包含 materials，无需再单独安装或启用 materials。**
 

@@ -2,7 +2,7 @@
 
 为 DSH 的 `ctx.web` 提供 Tavily 搜索，复用现有 `web_search`。本包只提供插件，由 `banso-dsh` bundle 默认加载并选用。本包不负责网页获取。
 
-接口与依赖对齐 DSH `0.2.0-rc.2`。
+接口与依赖对齐 DSH `0.2.2-rc.5`。
 
 ## 配置
 

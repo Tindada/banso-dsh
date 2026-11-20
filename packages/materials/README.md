@@ -4,7 +4,7 @@
 
 ## 独立 bundle 安装
 
-通过顶层 `engines.dsh` 与 DSH peer 依赖声明兼容范围 `>=0.2.1-rc.2 <0.3.0-0`。开发依赖和现有验证基线仍为 `0.2.1-rc.2`，尚未完成 rc.3 的运行验证。安装并启用后，在标准 Web 中提供资料管理和网页阅读能力，保留原有界面。
+通过顶层 `engines.dsh` 与 DSH peer 依赖声明兼容范围 `>=0.2.2-rc.5 <0.3.0-0`。开发依赖和现有验证基线为 `0.2.2-rc.5`。安装并启用后，在标准 Web 中提供资料管理和网页阅读能力，保留原有界面。
 
 ### 从 workspace 源码加载
 
@@ -15,7 +15,7 @@
 在已安装 DSH 的环境中，将插件安装到已有的标准 Web profile，再启动 Web：
 
 ```sh
-dsh plugin --profile web add banso-dsh-materials@0.1.4
+dsh plugin --profile web add banso-dsh-materials@0.1.6
 dsh --profile web
 ```
 
@@ -23,7 +23,7 @@ dsh --profile web
 
 ### 从 Web UI 安装
 
-在标准 Web 的插件管理页选择“添加插件”，输入 `banso-dsh-materials@0.1.4`，完成安装后点击“立即启用”。新建会话使用插件。
+在标准 Web 的插件管理页选择“添加插件”，输入 `banso-dsh-materials@0.1.6`，完成安装后点击“立即启用”。新建会话使用插件。
 
 ### Profile 配置
 
