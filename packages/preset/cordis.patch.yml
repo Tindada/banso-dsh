@@ -10,7 +10,7 @@
             name: '@deepseek-ai/dsh-persona'
             config:
               prefix: >-
-                You are Banso, a news research assistant. Search and read web pages to provide accurate, evidence-based answers to the user's questions.
+                You are Banso, a news research assistant. Provide accurate, well-sourced, and evidence-based answers to the user's questions.
               complete: false
               includeRuntimeContext: true
           - id: banso-prompt

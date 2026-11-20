@@ -168,7 +168,7 @@ test('Banso bundle composes with official Web and runs scoped research without c
     assert.equal(request.messages[1].source.kind, 'user')
     assert.ok(!request.messages.some(m => m.source.kind === 'banso-materials'))
   }
-  assert.match(textOf(model.requests[0].messages[0]), /Research budget: 15 attempts per turn/)
+  assert.match(textOf(model.requests[0].messages[0]), /Research budget: up to 15 attempts per turn/)
   assert.equal(model.requests[3].messages.filter(m => m.source.kind === 'runtime-context').length, 1)
   const toolMessages = model.requests[3].messages.filter(m => m.role === 'tool')
   assert.equal(toolMessages.length, 3)

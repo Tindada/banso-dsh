@@ -112,7 +112,7 @@ test('search and read feed materials through tool results, survive JSONL and con
   assert.equal(textOf(initial.messages[1]), 'research')
   assert.equal(fetched.messages.filter(message => textOf(message).includes('Evidence.')).length, 1)
   assert.equal(fetched.messages.filter(message => message.role === 'assistant').length, 2)
-  assert.match(textOf(initial.messages[0]), /Research budget: 15 attempts per turn/)
+  assert.match(textOf(initial.messages[0]), /Research budget: up to 15 attempts per turn/)
   assert.equal(runtimeContexts(initial).length, 1)
   assert.equal(runtimeContexts(searched).length, 1)
   assert.equal(runtimeContexts(fetched).length, 1)

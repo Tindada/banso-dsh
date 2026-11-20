@@ -34,7 +34,7 @@ export function registerResearchBudget(ctx: Context, limit: number): void {
     name: 'banso:research-budget',
     order: ctx.systemPrompt.getSectionOrder('TOOL_WEB_SEARCH') - 1,
     interpolate: false,
-    text: `Research budget: ${limit} attempts per turn across web_search and web_read. Each call attempt counts once, including failed or rejected attempts. Remaining budget is reported in each research tool result.`,
+    text: `Research budget: up to ${limit} attempts per turn across web_search and web_read. Each call attempt counts once, including failed or rejected attempts. Remaining budget is reported in each research tool result.`,
   })
   ctx.on('system-prompt/assemble', async (_assembly, { agent }, next) => {
     const assembly = await next()

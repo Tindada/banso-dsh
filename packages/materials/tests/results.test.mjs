@@ -220,7 +220,7 @@ test('tool results append strictly at the tail without snapshot messages, keep s
     }
   }
   assert.equal(runtimeContexts(h.adapter.requests.at(-1).messages).length, 0)
-  assert.match(textOf(h.adapter.requests[0].messages[0]), /Research budget: 15 attempts per turn/)
+  assert.match(textOf(h.adapter.requests[0].messages[0]), /Research budget: up to 15 attempts per turn/)
 
   const toolMessages = h.adapter.requests.at(-1).messages.filter(m => m.role === 'tool')
   assert.equal(toolMessages.length, 5)
