@@ -1,9 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ValueSchemaSpec, InferValue } from '@deepseek-ai/dsh-tools'
 import { getPage, pageProperties } from './page.js'
 import { extractEvidence } from '../extraction/extract.js'
 import type { ExtractionConfig } from '../extraction/extract.js'
+import type { MaterialsState } from '../types.js'
 
 export interface ReadConfig extends ExtractionConfig { timeoutMs: number }
 
@@ -22,7 +24,9 @@ const schema = {
 
 type ReadResult = InferValue<typeof schema>
 
-export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition {
+export function createReadTool(
+  ctx: Context, config: ReadConfig, projection: ProjectionHandle<MaterialsState>,
+): ToolDefinition {
   return defineTool({
     name: 'web_read',
     description: 'Read a page directly or extract evidence for a given focus. Saved pages are reused, not refreshed. Returns page text (direct) or extracted evidence (extract) with a stable material handle; repeated direct reads of an already shown page return a reuse notice.',
@@ -39,7 +43,7 @@ export function createReadTool(ctx: Context, config: ReadConfig): ToolDefinition
       exec.signal.throwIfAborted()
       if (exec.agent === undefined) throw new Error('web_read requires an agent')
       const session = exec.agent.session
-      const page = await getPage(ctx, session, target, exec.signal)
+      const page = await getPage(ctx, session, target, exec.signal, projection)
       const result: ReadResult = { ...page.meta, mode, ...(mode === 'extract' ? { focus } : {}) }
       exec.signal.throwIfAborted()
       if (page.content === undefined || mode === 'direct') return result

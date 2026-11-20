@@ -266,7 +266,7 @@ export function applyMaterials(state: MaterialsState, event: SessionEvent): Mate
 }
 
 // Derived index over existing tool facts, not a new whole-state event domain.
-export const materialsProjection: ProjectionDefinition<'bansoMaterials'> = {
+export const materialsProjection: ProjectionDefinition<'bansoMaterials', MaterialsState> = {
   key: 'bansoMaterials',
   stateVersion: 4,
   stateSchema,

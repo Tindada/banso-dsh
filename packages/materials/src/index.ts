@@ -30,15 +30,17 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1).max(2_147_483_647).default(120_000),
 })
 
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   if ((config.provider === undefined) !== (config.model === undefined)) {
     throw new Error('Extraction provider and model must be configured together')
   }
-  ctx.sessionProjections.register(materialsProjection)
-  ctx.tools.register(createReadTool(ctx, config))
+  const projection = await ctx.sessionProjections.register(materialsProjection)
+  ctx.tools.register(createReadTool(ctx, config, projection), {
+    when: context => config.researchBudget > 0 && projection.stateOf(context.agent.session).budget.used < config.researchBudget,
+  })
   registerWebGuidance(ctx)
-  registerSearchWrapper(ctx)
+  registerSearchWrapper(ctx, config.researchBudget, projection)
   registerFetchRestriction(ctx)
-  registerResearchBudget(ctx, config.researchBudget)
-  registerResultRenderer(ctx)
+  registerResearchBudget(ctx, config.researchBudget, projection)
+  registerResultRenderer(ctx, projection)
 }

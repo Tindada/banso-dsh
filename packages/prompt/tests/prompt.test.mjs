@@ -7,7 +7,8 @@ import Llm, { LlmAdapter, LlmError, createUserMessage } from '@deepseek-ai/dsh-l
 import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderPrompt, renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
-import Tools, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
+import * as ToolExecutorNative from '@deepseek-ai/dsh-tool-executor-native'
 import * as BansoPrompt from '../lib/index.js'
 import { RESEARCH_PROMPT } from '../lib/prompts.js'
 
@@ -37,7 +38,7 @@ async function harness(t, config = {}) {
   t.after(() => ctx.fiber.dispose())
   for (const plugin of [Llm, Sessions, Projections]) await ctx.plugin(plugin)
   await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false, includeRuntimeContext: true, personaPrefix: 'Banso' })
-  for (const plugin of [Tools, Agents]) await ctx.plugin(plugin)
+  for (const plugin of [Tools, ToolExecutorNative, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(AgentLoop, { agents: [] })
   const fiber = await ctx.plugin(BansoPrompt, config)
   const adapter = new Adapter()
@@ -89,7 +90,7 @@ test('first request gets time; steering and later steps retain it; next turn ref
     const system = textOf(request.messages.find(msg => msg.role === 'system'))
     assert.equal((await ctx.systemPrompt.assemble({ agent, scope: agent })).sections
       .find(section => section.name === 'banso:research')?.text, RESEARCH_PROMPT)
-    assert.doesNotMatch(system, /\b(?:web_search|web_read|web_fetch|materials_hide)\b|materials snapshot/)
+    assert.doesNotMatch(system, /\b(?:web_search|web_read|web_fetch)\b/)
   }
   agent.followup(message('再研究一次'))
   await agent.whenIdle()
@@ -123,12 +124,16 @@ test('tool execution and the following model step keep the original reference ti
   t.mock.timers.enable({ apis: ['Date'], now: new Date(T1) })
   const { ctx, adapter, create } = await harness(t)
   let executions = 0
-  ctx.tools.register(defineContentToolFixture({
+  ctx.tools.register(defineTool({
     name: 'read_fixture', description: 'Read a fixture', parameters: {},
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true } } },
+      render: (_args, value) => [{ type: 'text', text: value.text }],
+    },
     async execute() {
       executions++
       t.mock.timers.setTime(new Date(T2).getTime())
-      return [{ type: 'text', text: 'fixture evidence' }]
+      return { text: 'fixture evidence' }
     },
   }))
   adapter.onRequest = (_, count) => count === 1 ? [

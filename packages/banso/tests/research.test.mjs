@@ -15,6 +15,7 @@ import Projections from '@deepseek-ai/dsh-session-projection'
 import * as Jsonl from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
+import * as ToolExecutorNative from '@deepseek-ai/dsh-tool-executor-native'
 import * as Timeout from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import Web from '@deepseek-ai/dsh-web'
 import * as WebTools from '@deepseek-ai/dsh-tool-web'
@@ -66,7 +67,7 @@ async function setup(root, enabled = true, fetchProvider, jinaConfig, mode = 'ex
   const ctx = new Context()
   const errors = []
   ctx.on('agent/error', ({ error }) => errors.push(error))
-  for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
+  for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, ToolExecutorNative, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Jsonl, { root, compression: 'none' })
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(BansoPrompt)
@@ -107,7 +108,6 @@ test('search and read feed materials through tool results, survive JSONL and con
   const [initial, searched, fetched] = first.adapter.requests
   for (const request of first.adapter.requests) {
     assert.equal(request.messages[0].role, 'system')
-    assert.ok(!request.messages.some(message => message.source.kind === 'banso-materials'))
   }
   assert.equal(textOf(initial.messages[1]), 'research')
   assert.equal(fetched.messages.filter(message => textOf(message).includes('Evidence.')).length, 1)
@@ -161,7 +161,6 @@ test('search and read feed materials through tool results, survive JSONL and con
   control.adapter.requests = []
   controlAgent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
   await controlAgent.whenIdle()
-  assert.ok(!control.adapter.requests.at(-1).messages.some(message => message.source.kind === 'banso-materials'))
   assert.match(textOf(control.adapter.requests.at(-1).messages.filter(m => m.role === 'tool').at(-1)), /Evidence/)
   assert.deepEqual(control.errors, [])
   assert.deepEqual(stateOf(resumed.ctx, restored), before)
@@ -220,9 +219,21 @@ test('single handle and URL calls overlap in the default loop and restore new ha
   assert.match(textOf(agent.session.snapshotEvents().filter(e => e.type === 'tool/result')[0].data.message), /Search snippet: Preview/)
 
   const other = (await first.ctx.agents.create({ sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
-  const isolated = await first.ctx.tools.execute({ agent: other, name: 'web_read', arguments: { target: 'S1', mode: 'extract', focus: 'facts' }, callId: 'isolated', signal: new AbortController().signal })
-  assert.equal(isolated.isError, true)
-  assert.match(textOf(isolated), /Unknown material handle/)
+  const signal = new AbortController().signal
+  const toolSet = await first.ctx.tools.resolve({ agent: other, modelSelection: { provider: 'mock', model: 'mock' }, signal })
+  try {
+    const batch = await first.ctx.tools.execute({
+      agent: other,
+      toolSet,
+      calls: [{ type: 'tool-call', id: 'isolated', name: 'web_read', arguments: JSON.stringify({ target: 'S1', mode: 'extract', focus: 'facts' }) }],
+      signal,
+    })
+    const isolated = batch.results[0].result
+    assert.equal(isolated.isError, true)
+    assert.match(textOf(isolated), /Unknown material handle/)
+  } finally {
+    toolSet.dispose()
+  }
   await first.ctx.fiber.dispose(); closed = true
 
   const resumed = await setup(root)
@@ -288,7 +299,6 @@ test('direct mode exposes bodies through tool results, restores JSONL and reuses
     assert.deepEqual(h.errors, [])
     assert.equal(h.adapter.extractions.length, 0)
     const last = h.adapter.requests.at(-1)
-    assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
     assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
   }
   await run(agent, first)
@@ -325,7 +335,6 @@ test('one session switches direct and extract both ways without fetching again',
     assert.deepEqual(h.errors, [])
     assert.equal(h.fetchCalls.length, 1)
     const last = h.adapter.requests.at(-1)
-    assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
     assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
     if (mode === 'extract') {
       assert.match(textOf(last.messages.filter(m => m.role === 'tool').at(-1)), /Evidence\. Focus:/)

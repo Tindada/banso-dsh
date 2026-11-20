@@ -10,7 +10,7 @@
   "type": "module",
   "license": "MIT",
   "engines": {
-    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+    "dsh": ">=0.2.2-rc.5 <0.3.0-0"
   },
   "files": [
     "cordis.patch.yml",
@@ -29,15 +29,15 @@
     "banso-dsh-materials": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-agent-preset": ">=0.2.1-rc.2 <0.3.0-0",
-    "@deepseek-ai/dsh-persona": ">=0.2.1-rc.2 <0.3.0-0",
-    "@deepseek-ai/dsh-web": ">=0.2.1-rc.2 <0.3.0-0",
-    "@deepseek-ai/dsh-tool-web": ">=0.2.1-rc.2 <0.3.0-0"
+    "@deepseek-ai/dsh-agent-preset": ">=0.2.2-rc.5 <0.3.0-0",
+    "@deepseek-ai/dsh-persona": ">=0.2.2-rc.5 <0.3.0-0",
+    "@deepseek-ai/dsh-web": ">=0.2.2-rc.5 <0.3.0-0",
+    "@deepseek-ai/dsh-tool-web": ">=0.2.2-rc.5 <0.3.0-0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-agent-preset": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-persona": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-web": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-tool-web": "0.2.1-rc.2"
+    "@deepseek-ai/dsh-agent-preset": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-persona": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-web": "0.2.2-rc.5",
+    "@deepseek-ai/dsh-tool-web": "0.2.2-rc.5"
   }
 }

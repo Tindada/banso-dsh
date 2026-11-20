@@ -1,7 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-web'
-import type {} from '../types.js'
+import type { MaterialsState } from '../types.js'
 import { fetchMetaFromValue, formatFetchOutput } from '@deepseek-ai/dsh-tool-web'
 import type { WebFetchMeta } from '@deepseek-ai/dsh-tool-web'
 import type { ValueSchemaSpec, InferValue } from '@deepseek-ai/dsh-tools'
@@ -30,10 +31,10 @@ const errorText = (error: unknown): string => error instanceof Error ? error.mes
 /** Acquire page data without mutating the projection; tool results commit the facts. */
 export async function getPage(
   ctx: Context, session: Session, target: string, signal: AbortSignal,
+  projection: ProjectionHandle<MaterialsState>,
 ): Promise<PageResult> {
   signal.throwIfAborted()
-  const state = ctx.sessionProjections.stateOf(session, 'bansoMaterials')
-  if (state === undefined) throw new Error('Materials projection is not registered')
+  const state = projection.stateOf(session)
   const handle = /^S[1-9]\d*$/.test(target)
   const item = handle ? state.items[target] : state.items[state.urlIndex[target] ?? '']
   if (handle && item === undefined) throw new Error(`Unknown material handle: ${target}`)

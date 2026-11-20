@@ -1,7 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { scopeChainOf, scopeOf } from '@deepseek-ai/dsh-scope'
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
+import type { ToolDefinition, ToolRegistrationOptions } from '@deepseek-ai/dsh-tools'
+import type { MaterialsState } from '../types.js'
 
 /** Retain native search execution, output and metadata while updating tool description for material handles. */
 export function wrapWebTool(original: ToolDefinition): ToolDefinition {
@@ -17,7 +19,9 @@ export function wrapWebTool(original: ToolDefinition): ToolDefinition {
 
 const names = ['web_search'] as const
 
-export function registerSearchWrapper(ctx: Context): void {
+export function registerSearchWrapper(
+  ctx: Context, limit?: number, projection?: ProjectionHandle<MaterialsState>,
+): void {
   const ownerScope = scopeOf(ctx)
   const registrations = new Map<Agent, (() => void)[]>()
   const wrappers = new WeakMap<ToolDefinition, ToolDefinition>()
@@ -51,7 +55,10 @@ export function registerSearchWrapper(ctx: Context): void {
             wrapped = wrapWebTool(original)
             wrappers.set(original, wrapped)
           }
-          disposers.push(agent.ctx.tools.register(wrapped))
+          const options: ToolRegistrationOptions = limit !== undefined && projection !== undefined
+            ? { when: context => limit > 0 && projection.stateOf(context.agent.session).budget.used < limit }
+            : {}
+          disposers.push(agent.ctx.tools.register(wrapped, options))
         }
       }
     } finally {

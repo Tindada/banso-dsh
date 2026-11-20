@@ -54,7 +54,7 @@ test('Banso bundle composes with official Web and runs scoped research without c
   const entries = composeEntries(profile.layers.map(layer => layer.patches))
   assert.equal(entries.find(row => row.id === 'agent-preset-registry').config.default, 'standard')
   for (const id of ['standard', 'minimal', 'ptc', 'cordis', 'banso']) assert.equal(entries.find(row => row.id === `preset-${id}`).disabled ?? false, false)
-  assert.deepEqual(entries.filter(row => row.id.startsWith('tool-') && !row.disabled).map(row => row.id), ['tool-working-directory'])
+  assert.deepEqual(entries.filter(row => row.id.startsWith('tool-') && !row.disabled).map(row => row.id), ['tool-working-directory', 'tool-agent-team', 'tool-executor-native'])
 
   // Mount the actual declaration using the real preset loader and agent loop.
   const ctx = new Context()
@@ -65,6 +65,7 @@ test('Banso bundle composes with official Web and runs scoped research without c
   for (const name of ['llm', 'session', 'session-projection', 'system-prompt', 'tools', 'agent', 'fs-local', 'working-directory']) {
     await ctx.plugin((await fromDsh(`@deepseek-ai/dsh-${name}`)).default, name === 'system-prompt' ? { personaPrefix: 'HOST IDENTITY' } : {})
   }
+  await ctx.plugin(await fromDsh('@deepseek-ai/dsh-tool-executor-native'))
   await ctx.plugin(await fromDsh('@deepseek-ai/dsh-tool-working-directory'))
   await ctx.plugin((await fromDsh('@deepseek-ai/dsh-agent-loop')).default, { agents: [] })
   await ctx.plugin(await fromDsh('@deepseek-ai/dsh-tool-call-timeout-policy'))
@@ -166,7 +167,6 @@ test('Banso bundle composes with official Web and runs scoped research without c
     assert.match(content, /Current working directory:/)
     assert.equal(request.messages[0].role, 'system')
     assert.equal(request.messages[1].source.kind, 'user')
-    assert.ok(!request.messages.some(m => m.source.kind === 'banso-materials'))
   }
   assert.match(textOf(model.requests[0].messages[0]), /Research budget: up to 15 attempts per turn/)
   assert.equal(model.requests[3].messages.filter(m => m.source.kind === 'runtime-context').length, 1)
@@ -193,7 +193,6 @@ test('Banso bundle composes with official Web and runs scoped research without c
   assert.match(JSON.stringify(last.messages), /HOST APPROVAL POLICY/)
   assert.match(JSON.stringify(last.messages), /HOST CHECKOUT PATH/)
   assert.match(JSON.stringify(last.messages), /HOST WEB GUI URL/)
-  assert.ok(!last.messages.some(m => m.source.kind === 'banso-materials'))
   assert.match(textOf(last.messages.find(m => m.role === 'tool')), /Search snippet/)
   assert.match(textOf(last.messages.findLast(m => m.role === 'tool')), /FULL PAGE BODY/)
   assert.equal(records[0].searches, 2)

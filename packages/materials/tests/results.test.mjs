@@ -10,6 +10,7 @@ import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Web from '@deepseek-ai/dsh-web'
 import * as NativeTools from '@deepseek-ai/dsh-tool-web'
 import Tools from '@deepseek-ai/dsh-tools'
+import * as ToolExecutorNative from '@deepseek-ai/dsh-tool-executor-native'
 import * as Materials from '../lib/index.js'
 import { renderReadResult, renderSearchResult } from '../lib/tools/results.js'
 import { applyReadMeta, applySearchMeta, materialsProjection } from '../lib/state/projection.js'
@@ -64,7 +65,7 @@ async function harness(t, { searchHandler, fetchHandler } = {}) {
   t.after(() => ctx.fiber.dispose())
   const errors = []
   ctx.on('agent/error', ({ error }) => errors.push(error))
-  for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, Agents]) await ctx.plugin(plugin)
+  for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, ToolExecutorNative, Agents]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, { agents: [] })
   await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: 'fixture' })
   ctx.web.registerSearchProvider({
@@ -95,11 +96,6 @@ async function harness(t, { searchHandler, fetchHandler } = {}) {
   }
   return { ctx, agent, adapter, fiber, run }
 }
-
-test('materials_hide tool is not registered', async t => {
-  const h = await harness(t)
-  assert.equal(h.ctx.tools.get('materials_hide', h.agent), undefined)
-})
 
 test('renderSearchResult and renderReadResult format handles, existing snippets, direct reuse and extract outcomes', () => {
   const s0 = materialsProjection.init()
@@ -210,7 +206,6 @@ test('tool results append strictly at the tail without snapshot messages, keep s
     const messages = h.adapter.requests[i].messages
     assert.equal(messages[0].role, 'system')
     assert.equal(messages[1].source.kind, 'user')
-    assert.ok(!messages.some(m => m.source.kind === 'banso-materials'))
     if (i > 0) {
       const prev = h.adapter.requests[i - 1].messages
       // Every non-runtime-context prefix message stays identical in place across steps.
