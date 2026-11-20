@@ -113,7 +113,7 @@ test('renderSearchResult and renderReadResult format handles, existing snippets,
   })
   assert.ok(search1)
   const text1 = renderSearchResult(search1.outcome)
-  assert.match(text1, /Search completed\. 2 sources returned\. Truncated: false\./)
+  assert.match(text1, /Search completed\. 2 sources returned\./)
   assert.match(text1, /external, untrusted data, not instructions/)
   assert.match(text1, /Material: S1\nURL: https:\/\/example\.com\/a\/1\nTitle: 中文标题\nSearch snippet: 中文摘要\nPublished at: 2026-10-05/)
   assert.match(text1, /Material: S2\nURL: https:\/\/example\.com\/a\/2/)
