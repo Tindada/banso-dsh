@@ -55,9 +55,10 @@ dsh --profile web
 | `provider`、`model` | 当前 session 最新请求的模型路由 | 必须成对覆盖；没有路由时提取失败 |
 | `maxInputBytes` | 200,000 | 提取系统提示词与序列化输入的 UTF-8 字节上限，超限报错而不截取 |
 | `maxOutputTokens` | 4,096 | 提取输出上限；达到上限不保存残缺证据 |
+| `maxDirectChars` | 100,000 | `direct` 模式返回给主模型的正文字符上限；超出时截取前缀并提示改用 `extract` |
 | `timeoutMs` | 120,000 | web_read 整体超时，单位毫秒 |
 
-`provider`、`model`、`maxInputBytes` 和 `maxOutputTokens` 仅用于提取；直接模式仍保留配置合法性校验，但不调用提取器。direct 不额外裁剪正文，保留 provider 截断；超过主模型上下文上限时作为运行失败处理。
+`provider`、`model`、`maxInputBytes` 和 `maxOutputTokens` 仅用于提取；直接模式仍保留配置合法性校验，但不调用提取器。`direct` 仅在返回给主模型时受 `maxDirectChars` 限制，内部缓存仍保留完整正文供后续 `extract` 使用。
 
 提取请求显式使用 `reasoningEffort: off`，不继承主对话的思考配置。
 

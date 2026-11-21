@@ -33,15 +33,19 @@ export function renderSearchResult(outcome: SearchOutcome): string {
 }
 
 /** Render web_read outcome directly into the tool result with handle, body/evidence, or reuse notice. */
-export function renderReadResult(outcome: ReadOutcome): string {
+export function renderReadResult(outcome: ReadOutcome, maxDirectChars = 100_000): string {
   const lines = [
     `Material: ${outcome.handle}`,
     `URL: ${outcome.requestUrl}`,
   ]
+  const directTruncated = outcome.mode === 'direct'
+    && !outcome.pageAlreadyShown
+    && outcome.fetched !== undefined
+    && outcome.fetched.content.length > maxDirectChars
   if (outcome.fetched !== undefined && (outcome.fetchedNow || outcome.error === undefined)) {
     lines.push(outcome.fetchedNow ? 'Page fetched.' : 'Saved page reused.')
     lines.push(`Final URL: ${outcome.fetched.finalUrl}`)
-    lines.push(`Truncated: ${outcome.fetched.truncated}`)
+    lines.push(`Truncated: ${outcome.fetched.truncated || directTruncated}`)
     lines.push(`Saved content characters: ${outcome.fetched.content.length}`)
   }
 
@@ -56,7 +60,11 @@ export function renderReadResult(outcome: ReadOutcome): string {
       return lines.join('\n')
     }
     if (outcome.fetched !== undefined) {
-      return `${lines.join('\n')}\n\n${PAGE_UNTRUSTED}\nPage text:\n${outcome.fetched.content}`
+      const content = outcome.fetched.content
+      const body = directTruncated
+        ? `${content.slice(0, maxDirectChars)}\n\n[Page text truncated at ${maxDirectChars} of ${content.length} characters. Use web_read with mode: "extract" and a specific focus to inspect other parts.]`
+        : content
+      return `${lines.join('\n')}\n\n${PAGE_UNTRUSTED}\nPage text:\n${body}`
     }
     return lines.join('\n')
   }
@@ -70,7 +78,7 @@ export function renderReadResult(outcome: ReadOutcome): string {
 }
 
 export function registerResultRenderer(
-  ctx: Context, projection: ProjectionHandle<MaterialsState>,
+  ctx: Context, projection: ProjectionHandle<MaterialsState>, maxDirectChars = 100_000,
 ): void {
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
@@ -92,6 +100,6 @@ export function registerResultRenderer(
 
     const transition = applyReadMeta(state, result.meta)
     if (transition === undefined) return decision
-    return { kind: 'accept', content: [{ type: 'text', text: renderReadResult(transition.outcome) }], ...extra }
+    return { kind: 'accept', content: [{ type: 'text', text: renderReadResult(transition.outcome, maxDirectChars) }], ...extra }
   })
 }

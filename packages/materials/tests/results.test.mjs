@@ -162,6 +162,12 @@ test('renderSearchResult and renderReadResult format handles, existing snippets,
   assert.match(directFirstText, /Saved page reused\./)
   assert.match(directFirstText, /Page text:\nPrivate cached body/)
 
+  const truncatedDirectText = renderReadResult(directFirst.outcome, 7)
+  assert.match(truncatedDirectText, /Truncated: true/)
+  assert.match(truncatedDirectText, /Saved content characters: 19/)
+  assert.match(truncatedDirectText, /Page text:\nPrivate\n\n\[Page text truncated at 7 of 19 characters\. Use web_read with mode: "extract"/)
+  assert.doesNotMatch(truncatedDirectText, /cached body/)
+
   const directAgain = applyReadMeta(directFirst.next, {
     requestUrl: `${url}/1`,
     mode: 'direct',

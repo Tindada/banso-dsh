@@ -459,7 +459,7 @@ test('DSH timeout policy cancels in-flight extraction and publishes no partial b
 
 
 test('configuration validates paired routes and positive budgets', async () => {
-  for (const value of [{ maxInputBytes: 0 }, { maxOutputTokens: -1 }, { timeoutMs: 0 }]) {
+  for (const value of [{ maxInputBytes: 0 }, { maxOutputTokens: -1 }, { maxDirectChars: 0 }, { timeoutMs: 0 }]) {
     assert.throws(() => Materials.Config(value))
   }
   for (const value of [{ provider: 'mock' }, { model: 'extract' }]) {

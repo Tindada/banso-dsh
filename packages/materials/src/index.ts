@@ -20,13 +20,17 @@ export type {
 export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents', 'tools', 'web', 'llm', 'systemPrompt']
 
-export interface Config extends ReadConfig { researchBudget: number }
+export interface Config extends ReadConfig {
+  researchBudget: number
+  maxDirectChars: number
+}
 export const Config: z<Config> = z.object({
   researchBudget: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(15),
   provider: z.string(),
   model: z.string(),
-  maxInputBytes: z.number().step(1).min(1).default(200_000),
-  maxOutputTokens: z.number().step(1).min(1).default(4_096),
+  maxInputBytes: z.number().step(1).min(1).default(200_000).description('Maximum UTF-8 bytes sent to the extraction model in web_read extract mode.'),
+  maxOutputTokens: z.number().step(1).min(1).default(4_096).description('Maximum output tokens for the extraction model in web_read extract mode.'),
+  maxDirectChars: z.number().step(1).min(1).default(100_000).description('Maximum characters of page text returned to the main model in web_read direct mode.'),
   timeoutMs: z.number().step(1).min(1).max(2_147_483_647).default(120_000),
 })
 
@@ -42,5 +46,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   registerSearchWrapper(ctx, config.researchBudget, projection)
   registerFetchRestriction(ctx)
   registerResearchBudget(ctx, config.researchBudget, projection)
-  registerResultRenderer(ctx, projection)
+  registerResultRenderer(ctx, projection, config.maxDirectChars)
 }
