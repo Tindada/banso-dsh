@@ -14,7 +14,7 @@
       name: '@deepseek-ai/dsh-web'
       config:
         searchProvider: deepseek-search-api
-        fetchProvider: jina
+        fetchProvider: deepseek-fetch-api
 
     - id: web-search-tavily
       name: banso-dsh-web-search-tavily
