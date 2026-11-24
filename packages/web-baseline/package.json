@@ -1,0 +1,29 @@
+{
+  "name": "banso-dsh-web-baseline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native DSH web search/fetch baseline bundle for Banso evaluation",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/copy-base-patch.mjs"
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.5 <0.3.0-0"
+  },
+  "dependencies": {
+    "banso-dsh-base": "workspace:*",
+    "@deepseek-ai/dsh-web": ">=0.2.2-rc.5 <0.3.0-0",
+    "@deepseek-ai/dsh-web-deepseek-api": ">=0.2.2-rc.5 <0.3.0-0",
+    "@deepseek-ai/dsh-tool-web": ">=0.2.2-rc.5 <0.3.0-0",
+    "@deepseek-ai/dsh-tool-call-timeout-policy": ">=0.2.2-rc.5 <0.3.0-0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": [
+        "./base.patch.yml",
+        "./cordis.patch.yml"
+      ]
+    }
+  }
+}

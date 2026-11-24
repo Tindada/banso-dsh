@@ -404,6 +404,24 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/web-baseline:
+    dependencies:
+      '@deepseek-ai/dsh-tool-call-timeout-policy':
+        specifier: '>=0.2.2-rc.5 <0.3.0-0'
+        version: 0.2.2-rc.5(16c11d9c4310aeeca6369eadc56ea52b)
+      '@deepseek-ai/dsh-tool-web':
+        specifier: '>=0.2.2-rc.5 <0.3.0-0'
+        version: 0.2.2-rc.5(1e9b4daaf82b5b1344eb8486216ebfb2)
+      '@deepseek-ai/dsh-web':
+        specifier: '>=0.2.2-rc.5 <0.3.0-0'
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-llm@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)))
+      '@deepseek-ai/dsh-web-deepseek-api':
+        specifier: '>=0.2.2-rc.5 <0.3.0-0'
+        version: 0.2.2-rc.5(e2ccff83c1f29901815700f0c3dc5552)
+      banso-dsh-base:
+        specifier: workspace:*
+        version: link:../base
+
   packages/web-fetch-jina:
     dependencies:
       '@deepseek-ai/schemastery':
