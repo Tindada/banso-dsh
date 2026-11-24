@@ -116,7 +116,13 @@ uv run python -m banso_eval.score runs/gisa_60_001/results.jsonl \
 
 准备步骤只写入 `derived/`，不创建运行目录。批量入口默认读取 `data/gisa/derived/cases_60.jsonl`（可用 `--input` 覆盖），开始测评时才创建 `runs/<运行名>/` 并复制题目快照。
 
-单题和多题采用相同的运行配置与产物结构。结果目录保存 `manifest.json`、`cases.jsonl`、逐题追加的 `results.jsonl`、`sessions/<session_id>/events.jsonl` 和完成后的 `summary.json`。manifest 记录题库版本、选题内容哈希及运行参数，不保存环境变量或密钥。
+单题和多题采用相同的运行配置与产物结构。结果目录保存 `manifest.json`、`cases.jsonl`、逐题追加的 `results.jsonl`、`sessions/<session_id>/events.jsonl`、逐题 token 明细 `token_usage.jsonl` 和完成后的 `summary.json`（含 `token_usage` 汇总，拆分 `main`、`extract` 与 `combined`）。manifest 记录题库版本、选题内容哈希及运行参数，不保存环境变量或密钥。
+
+如需对历史运行目录补跑或重算 token 统计，可执行独立入口（就地写入 `token_usage.jsonl` 并更新 `summary.json` 的 `token_usage` 字段）：
+
+```sh
+uv run python -m banso_eval.token_usage runs/gisa_60_002
+```
 
 中断后使用相同命令加 `--resume`，跳过所有已记录题目（包括失败），不自动重试。启动前检查选题与运行参数是否一致；不要同时向同一目录运行两个进程。若结果末行因异常关机损坏，会拒绝续跑，需先检查并移走不完整末行。续跑仍需自行保持插件版本和环境配置一致；当前未实现与旧 Banso 等价的研究预算或整题超时。
 

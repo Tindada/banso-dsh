@@ -12,6 +12,7 @@ from deepseek_harness import DeepSeekHarness
 from dotenv import dotenv_values
 
 from .answer import AnswerResult, GisaCase, answer_case
+from .token_usage import summarize_run_token_usage
 
 
 def _close_harness(harness: DeepSeekHarness) -> None:
@@ -157,8 +158,12 @@ def main(argv=None):
                 harness = DeepSeekHarness(**options)
                 harness.start()
                 results = run_cases(harness, cases, output)
-        summary = {"case_count": len(cases), "recorded_count": len(results),
-                   "ok_count": sum(r.status == "ok" for r in results.values())}
+        summary = {
+            "case_count": len(cases),
+            "recorded_count": len(results),
+            "ok_count": sum(r.status == "ok" for r in results.values()),
+            "token_usage": summarize_run_token_usage(output),
+        }
         write_json(output / "summary.json", summary)
         print(json.dumps(summary))
         return 0 if summary["ok_count"] == len(cases) else 1
