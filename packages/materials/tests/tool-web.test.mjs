@@ -32,7 +32,7 @@ const url = 'https://example.com/article'
 const config = { provider: 'mock', model: 'extract' }
 class Adapter extends LlmAdapter {
   requests = []
-  text = '{"text":"Compact evidence."}'
+  text = 'Compact evidence.'
   finish = { kind: 'stop' }
   usage = { inputTokens: 100, outputTokens: 20, cacheReadTokens: 40, totalTokens: 160 }
   action
@@ -258,21 +258,24 @@ test('HTTP and network failures skip extraction; extraction failures retain the 
   assert.equal((await h.execute(agent)).meta.error, 'Fetch failed: offline')
   assert.equal(h.adapter.requests.length, 0)
   h.results.fetch = { url, statusCode: 200, body: { kind: 'text', content: 'RAW BODY' }, truncated: true }
-  for (const text of ['not JSON', '{}', '{"text":42}', '[]']) {
+  h.adapter.text = 'Line 1\t"quoted"\nLine 2\u0007'
+  const multiline = await h.execute(agent)
+  assert.equal(multiline.isError, false)
+  assert.equal(multiline.meta.error, undefined)
+  assert.equal(multiline.meta.evidence, 'Line 1\t"quoted"\nLine 2\u0007')
+  assert.match(multiline.meta.content, /RAW BODY/)
+  assert.equal(multiline.meta.truncated, true)
+  assert.deepEqual(multiline.meta.usage, h.adapter.usage)
+  for (const text of ['', '  \n ', 'NO_RELEVANT_EVIDENCE', ' NO_RELEVANT_EVIDENCE \n']) {
     h.adapter.text = text
-    const result = await h.execute(agent)
-    assert.equal(result.isError, false)
-    assert.match(result.meta.error, /Extraction failed:/)
-    assert.match(result.meta.content, /RAW BODY/)
-    assert.equal(result.meta.truncated, true)
-    assert.deepEqual(result.meta.usage, h.adapter.usage)
+    assert.equal((await h.execute(agent)).meta.evidence, '')
   }
-  h.adapter.text = '{"text":""}'
-  assert.equal((await h.execute(agent)).meta.evidence, '')
-  h.adapter.text = '{"text":"partial"}'
+  h.adapter.text = 'partial'
   h.adapter.finish = { kind: 'max-tokens' }
   const limited = await h.execute(agent)
   assert.match(limited.meta.error, /Extraction failed:/)
+  assert.match(limited.meta.content, /RAW BODY/)
+  assert.equal(limited.meta.truncated, true)
   assert.deepEqual(limited.meta.usage, h.adapter.usage)
   h.adapter.action = () => { throw new Error('LLM failed') }
   assert.match((await h.execute(agent)).meta.error, /LLM failed/)

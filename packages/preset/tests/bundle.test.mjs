@@ -113,7 +113,7 @@ test('Banso bundle composes with official Web and runs scoped research without c
     async resolveModel(provider, model) { return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } } }
     async *stream(request) {
       let response = 'Done'
-      if (request.system !== undefined) { this.extractions++; response = JSON.stringify({ text: 'EXTRACTED EVIDENCE' }) }
+      if (request.system !== undefined) { this.extractions++; response = 'EXTRACTED EVIDENCE' }
       else {
         this.requests.push(request)
         const last = request.messages.findLast(m => m.role === 'user' && m.source.kind === 'user')

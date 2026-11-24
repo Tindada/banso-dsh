@@ -36,7 +36,7 @@ class Adapter extends LlmAdapter {
     if (request.system !== undefined) {
       this.extractions.push(request)
       const input = JSON.parse(textOf(request.messages[0]))
-      const text = JSON.stringify({ text: `Evidence. Focus: ${input.focus}` })
+      const text = `Evidence. Focus: ${input.focus}`
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'text-delta', index: 0, text }
       yield { type: 'block-end', index: 0, block: { type: 'text', text } }

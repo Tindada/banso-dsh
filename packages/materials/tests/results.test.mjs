@@ -24,7 +24,7 @@ class Adapter extends LlmAdapter {
   requests = []
   steps = []
   extractions = []
-  extractText = '{"text":"提取证据"}'
+  extractText = '提取证据'
   async resolveModel(provider, model) {
     return { provider, id: model, name: model, reasoning: { efforts: [{ id: 'off', name: 'Off' }] } }
   }
