@@ -33,7 +33,11 @@ export function renderSearchResult(outcome: SearchOutcome): string {
 }
 
 /** Render web_read outcome directly into the tool result with handle, body/evidence, or reuse notice. */
-export function renderReadResult(outcome: ReadOutcome, maxDirectChars = 100_000): string {
+export function renderReadResult(
+  outcome: ReadOutcome,
+  maxDirectChars = 100_000,
+  maxExtractInputBytes = 200_000,
+): string {
   const lines = [
     `Material: ${outcome.handle}`,
     `URL: ${outcome.requestUrl}`,
@@ -61,8 +65,11 @@ export function renderReadResult(outcome: ReadOutcome, maxDirectChars = 100_000)
     }
     if (outcome.fetched !== undefined) {
       const content = outcome.fetched.content
+      const truncationNote = Buffer.byteLength(content, 'utf8') < maxExtractInputBytes
+        ? `[Page text truncated at ${maxDirectChars} of ${content.length} characters. Use web_read with mode: "extract" and a specific focus to inspect other parts.]`
+        : `[Page text truncated at ${maxDirectChars} of ${content.length} characters. This page also exceeds the extract input limit (${maxExtractInputBytes} bytes); try a narrower URL/query or another source.]`
       const body = directTruncated
-        ? `${content.slice(0, maxDirectChars)}\n\n[Page text truncated at ${maxDirectChars} of ${content.length} characters. Use web_read with mode: "extract" and a specific focus to inspect other parts.]`
+        ? `${content.slice(0, maxDirectChars)}\n\n${truncationNote}`
         : content
       return `${lines.join('\n')}\n\n${PAGE_UNTRUSTED}\nPage text:\n${body}`
     }
@@ -78,7 +85,10 @@ export function renderReadResult(outcome: ReadOutcome, maxDirectChars = 100_000)
 }
 
 export function registerResultRenderer(
-  ctx: Context, projection: ProjectionHandle<MaterialsState>, maxDirectChars = 100_000,
+  ctx: Context,
+  projection: ProjectionHandle<MaterialsState>,
+  maxDirectChars = 100_000,
+  maxExtractInputBytes = 200_000,
 ): void {
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
@@ -100,6 +110,6 @@ export function registerResultRenderer(
 
     const transition = applyReadMeta(state, result.meta)
     if (transition === undefined) return decision
-    return { kind: 'accept', content: [{ type: 'text', text: renderReadResult(transition.outcome, maxDirectChars) }], ...extra }
+    return { kind: 'accept', content: [{ type: 'text', text: renderReadResult(transition.outcome, maxDirectChars, maxExtractInputBytes) }], ...extra }
   })
 }

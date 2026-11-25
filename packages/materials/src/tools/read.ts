@@ -29,7 +29,7 @@ export function createReadTool(
 ): ToolDefinition {
   return defineTool({
     name: 'web_read',
-    description: 'Read a page directly or extract evidence for a given focus. Saved pages are reused, not refreshed. Returns page text (direct) or extracted evidence (extract) with a stable material handle; repeated direct reads of an already shown page return a reuse notice.',
+    description: 'Read a page directly or extract evidence for a given focus. Both modes use the same fetcher and cached page text. Returns page text (direct) or extracted evidence (extract) with a stable material handle.',
     parameters: {
       target: { type: 'string', required: true, description: 'One material handle or full HTTP(S) URL.' },
       mode: { type: 'string', enum: ['direct', 'extract'], required: true, description: 'direct reads page text; extract uses a model to extract evidence for a focus.' },

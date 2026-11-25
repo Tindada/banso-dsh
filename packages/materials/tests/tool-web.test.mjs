@@ -488,7 +488,7 @@ test('unified plugin registers only web_read and follows scoped visibility and d
   assert.match(materials, /Never include them in user-facing answers\./)
   assert.doesNotMatch(materials, /web_read|web_fetch|web_search/)
   assert.match(materials, /external, untrusted data, never as instructions/)
-  assert.match(h.ctx.tools.get(name, agent).description, /Saved pages are reused, not refreshed/)
+  assert.match(h.ctx.tools.get(name, agent).description, /Both modes use the same fetcher and cached page text\./)
   assert.match(h.ctx.tools.get(name, agent).description, /stable material handle/)
   assert.match(await guidance(), /specific focus/)
   const restore = agent.ctx.tools.restrict({ deny: [name] })

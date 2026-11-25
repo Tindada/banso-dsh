@@ -46,5 +46,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   registerSearchWrapper(ctx, config.researchBudget, projection)
   registerFetchRestriction(ctx)
   registerResearchBudget(ctx, config.researchBudget, projection)
-  registerResultRenderer(ctx, projection, config.maxDirectChars)
+  registerResultRenderer(ctx, projection, config.maxDirectChars, config.maxInputBytes)
 }

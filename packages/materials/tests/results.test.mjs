@@ -168,6 +168,10 @@ test('renderSearchResult and renderReadResult format handles, existing snippets,
   assert.match(truncatedDirectText, /Page text:\nPrivate\n\n\[Page text truncated at 7 of 19 characters\. Use web_read with mode: "extract"/)
   assert.doesNotMatch(truncatedDirectText, /cached body/)
 
+  const oversizedDirectText = renderReadResult(directFirst.outcome, 7, 19)
+  assert.match(oversizedDirectText, /Page text:\nPrivate\n\n\[Page text truncated at 7 of 19 characters\. This page also exceeds the extract input limit \(19 bytes\); try a narrower URL\/query or another source\.\]/)
+  assert.doesNotMatch(oversizedDirectText, /mode: "extract"/)
+
   const directAgain = applyReadMeta(directFirst.next, {
     requestUrl: `${url}/1`,
     mode: 'direct',
