@@ -12,6 +12,7 @@ packages/web-baseline/THIRD_PARTY_NOTICES.md
 evaluation/.venv/
 evaluation/runs/
 evaluation/data/
+evaluation/analysis/
 __pycache__/
 *.py[cod]
 .pytest_cache/
