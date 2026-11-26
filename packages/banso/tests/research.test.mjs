@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
 import * as Jina from 'banso-dsh-web-fetch-jina'
+import * as Fallback from 'banso-dsh-web-fetch-fallback'
 import { test } from 'node:test'
 import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -411,4 +412,65 @@ test('shared research budget admits only the first call and resets on the next t
   assert.equal(stateOf(h.ctx, agent).budget.used, 0)
   assert.deepEqual(stateOf(h.ctx, agent).items, items)
   assert.ok(h.adapter.requests.at(-1).tools.some(tool => tool.name === 'web_read'))
+})
+
+test('web_read falls back from DeepSeek Fetch API 404 to Jina Reader seamlessly', async t => {
+  const dsRequests = []
+  const jinaRequests = []
+  const markdown = '# Fallback article\n\nRecovered via Jina.'
+  const dsServer = createServer((req, res) => {
+    dsRequests.push(req.url)
+    res.statusCode = 404
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({ error: 'failed to fetch URL' }))
+  })
+  const jinaServer = createServer((req, res) => {
+    jinaRequests.push(req.url)
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({ code: 200, status: 20000, data: { url: url + '/jina', content: markdown } }))
+  })
+  dsServer.listen(0, '127.0.0.1')
+  jinaServer.listen(0, '127.0.0.1')
+  await Promise.all([once(dsServer, 'listening'), once(jinaServer, 'listening')])
+  t.after(() => Promise.all([
+    new Promise(resolve => { dsServer.closeAllConnections(); dsServer.close(resolve) }),
+    new Promise(resolve => { jinaServer.closeAllConnections(); jinaServer.close(resolve) }),
+  ]))
+
+  const root = await mkdtemp(join(tmpdir(), 'banso-fallback-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const ctx = new Context()
+  const errors = []
+  ctx.on('agent/error', ({ error }) => errors.push(error))
+  for (const plugin of [Llm, Sessions, Projections, Prompt, Tools, ToolExecutorNative, Agents]) await ctx.plugin(plugin)
+  await ctx.plugin(Jsonl, { root, compression: 'none' })
+  await ctx.plugin(Loop, { agents: [] })
+  await ctx.plugin(BansoPrompt)
+  await ctx.plugin(Web, { searchProvider: 'fixture', fetchProvider: 'fallback' })
+  ctx.web.registerSearchProvider({ id: 'fixture', available: () => true, async search() {
+    return { sources: [{ url, title: 'Article', snippet: 'Preview' }], truncated: false }
+  } })
+  await ctx.plugin(Fallback, {
+    deepseek: { apiKey: 'test-key', baseURL: `http://127.0.0.1:${dsServer.address().port}`, timeoutMs: 5000 },
+    jina: { apiKey: '', baseURL: `http://127.0.0.1:${jinaServer.address().port}`, timeoutMs: 5000 },
+  })
+  await ctx.plugin(WebTools, { fetch: false })
+  await ctx.plugin(Timeout)
+  await ctx.plugin(Materials)
+  const adapter = new Adapter()
+  adapter.mode = 'direct'
+  adapter.targets = ['S1']
+  ctx.llm.registerAdapter(['mock'], adapter)
+  t.after(() => ctx.fiber.dispose())
+
+  const { agent } = await ctx.agents.create({ sessionId: SessionId('fallback'), agentOptions: { provider: 'mock', model: 'mock' } })
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
+  await agent.whenIdle()
+
+  assert.deepEqual(errors, [])
+  assert.deepEqual(dsRequests, ['/fetch'])
+  assert.deepEqual(jinaRequests, [`/${url}`])
+  const lastTool = agent.session.snapshotEvents().filter(e => e.type === 'tool/result').at(-1)
+  assert.match(textOf(lastTool.data.message), /Recovered via Jina\./)
+  assert.equal(lastTool.data.meta.finalUrl, url + '/jina')
 })

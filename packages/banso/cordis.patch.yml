@@ -14,7 +14,7 @@
       name: '@deepseek-ai/dsh-web'
       config:
         searchProvider: deepseek-search-api
-        fetchProvider: deepseek-fetch-api
+        fetchProvider: fallback
 
     - id: web-search-tavily
       name: banso-dsh-web-search-tavily
@@ -24,6 +24,9 @@
 
     - id: web-fetch-jina
       name: banso-dsh-web-fetch-jina
+
+    - id: web-fetch-fallback
+      name: banso-dsh-web-fetch-fallback
 
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'
