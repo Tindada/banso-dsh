@@ -43,7 +43,6 @@ export function renderReadResult(
     `URL: ${outcome.requestUrl}`,
   ]
   const directTruncated = outcome.mode === 'direct'
-    && !outcome.pageAlreadyShown
     && outcome.fetched !== undefined
     && outcome.fetched.content.length > maxDirectChars
   if (outcome.fetched !== undefined && (outcome.fetchedNow || outcome.error === undefined)) {
@@ -59,10 +58,6 @@ export function renderReadResult(
   }
 
   if (outcome.mode === 'direct') {
-    if (outcome.pageAlreadyShown) {
-      lines.push(`Page text for ${outcome.handle} was already returned earlier in this session.`)
-      return lines.join('\n')
-    }
     if (outcome.fetched !== undefined) {
       const content = outcome.fetched.content
       const truncationNote = Buffer.byteLength(content, 'utf8') < maxExtractInputBytes

@@ -178,11 +178,11 @@ test('renderSearchResult and renderReadResult format handles, existing snippets,
   }, 4000)
   assert.ok(directAgain)
   const directAgainText = renderReadResult(directAgain.outcome)
-  assert.match(directAgainText, /Page text for S1 was already returned earlier in this session\./)
-  assert.doesNotMatch(directAgainText, /Private cached body/)
+  assert.match(directAgainText, /Saved page reused\./)
+  assert.match(directAgainText, /Page text:\nPrivate cached body/)
 })
 
-test('tool results append strictly at the tail without snapshot messages, keep snippets on repeat search, and deduplicate direct body', async t => {
+test('tool results append strictly at the tail without snapshot messages, keep snippets on repeat search, and return cached body on repeat direct read', async t => {
   let searchCount = 0
   const h = await harness(t, {
     searchHandler: () => {
@@ -234,8 +234,7 @@ test('tool results append strictly at the tail without snapshot messages, keep s
   assert.match(textOf(toolMessages[2]), /Material: S1[\s\S]*Page fetched\.[\s\S]*Evidence focus: focus-1[\s\S]*提取证据[\s\S]*Research budget: 15\. Attempts used: 3\. Remaining: 12\./)
   assert.doesNotMatch(textOf(toolMessages[2]), /正文完整保留/)
   assert.match(textOf(toolMessages[3]), /Material: S1[\s\S]*Saved page reused\.[\s\S]*Page text:[\s\S]*正文完整保留[\s\S]*Research budget: 15\. Attempts used: 4\. Remaining: 11\./)
-  assert.match(textOf(toolMessages[4]), /Page text for S1 was already returned earlier in this session\.[\s\S]*Research budget: 15\. Attempts used: 5\. Remaining: 10\./)
-  assert.doesNotMatch(textOf(toolMessages[4]), /正文完整保留/)
+  assert.match(textOf(toolMessages[4]), /Material: S1[\s\S]*Saved page reused\.[\s\S]*Page text:[\s\S]*正文完整保留[\s\S]*Research budget: 15\. Attempts used: 5\. Remaining: 10\./)
 })
 
 test('parallel web_search and web_read finalize in model order with consistent handles and existing flags', async t => {
@@ -288,7 +287,7 @@ test('parallel web_search and web_read finalize in model order with consistent h
   const state = h.ctx.sessionProjections.stateOf(h.agent.session, 'bansoMaterials')
   assert.deepEqual(state.urlIndex, { [urlA]: 'S1', [urlB]: 'S2', [urlC]: 'S3' })
   assert.equal(state.nextHandle, 4)
-  assert.equal(state.items.S3.pageShown, true)
+  assert.ok(state.items.S3.fetched)
 })
 
 test('plugin reload and session isolation preserve state without leaking handles', async t => {

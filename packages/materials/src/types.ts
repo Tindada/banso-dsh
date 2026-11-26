@@ -20,7 +20,6 @@ export interface Material {
   snippet?: string | undefined
   publishedAt?: string | undefined
   fetched?: FetchedContent | undefined
-  pageShown?: boolean | undefined
   evidence?: Evidence[] | undefined
 }
 

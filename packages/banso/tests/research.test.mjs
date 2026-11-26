@@ -294,30 +294,29 @@ test('direct mode exposes bodies through tool results, restores JSONL and reuses
   t.after(async () => { if (!closed) await first.ctx.fiber.dispose() })
   first.adapter.targets = ['S1']
   const { agent } = await first.ctx.agents.create({ sessionId: SessionId('direct'), agentOptions: { provider: 'mock', model: 'mock' } })
-  const run = async (agent, h) => {
+  const run = async (agent, h, expectedBodyCount) => {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'research' }], source: { kind: 'user' } }))
     await agent.whenIdle()
     assert.deepEqual(h.errors, [])
     assert.equal(h.adapter.extractions.length, 0)
     const last = h.adapter.requests.at(-1)
-    assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
+    assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, expectedBodyCount)
   }
-  await run(agent, first)
+  await run(agent, first, 1)
   assert.equal(first.fetchCalls.length, 1)
   const before = structuredClone(stateOf(first.ctx, agent))
   assert.equal(before.items.S1.evidence, undefined)
-  assert.equal(before.items.S1.pageShown, true)
   await first.ctx.fiber.dispose()
   closed = true
   const resumed = await setup(root, true, undefined, undefined, 'direct')
   t.after(() => resumed.ctx.fiber.dispose())
   const restored = (await resumed.ctx.agents.resume({ resumeSessionId: SessionId('direct'), agentOptions: { provider: 'mock', model: 'mock' } })).agent
   assert.deepEqual(stateOf(resumed.ctx, restored), before)
-  await run(restored, resumed)
+  await run(restored, resumed, 2)
   assert.equal(resumed.fetchCalls.length, 0)
   assert.deepEqual(stateOf(resumed.ctx, restored).items.S1.fetched, before.items.S1.fetched)
   const lastTool = restored.session.snapshotEvents().filter(e => e.type === 'tool/result').at(-1)
-  assert.match(textOf(lastTool.data.message), /Page text for S1 was already returned earlier in this session\./)
+  assert.match(textOf(lastTool.data.message), /Saved page reused\.[\s\S]*Page text:[\s\S]*FULL BODY ONLY/)
 })
 
 
@@ -327,7 +326,9 @@ test('one session switches direct and extract both ways without fetching again',
   const h = await setup(root)
   t.after(() => h.ctx.fiber.dispose())
   const { agent } = await h.ctx.agents.create({ sessionId: SessionId('switch'), agentOptions: { provider: 'mock', model: 'mock' } })
+  let directCount = 0
   for (const mode of ['direct', 'extract', 'direct', 'extract']) {
+    if (mode === 'direct') directCount++
     h.adapter.mode = mode
     h.adapter.requests = []
     h.adapter.targets = ['S1']
@@ -336,7 +337,7 @@ test('one session switches direct and extract both ways without fetching again',
     assert.deepEqual(h.errors, [])
     assert.equal(h.fetchCalls.length, 1)
     const last = h.adapter.requests.at(-1)
-    assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, 1)
+    assert.equal(last.messages.map(textOf).join('\n').split('FULL BODY ONLY').length - 1, directCount)
     if (mode === 'extract') {
       assert.match(textOf(last.messages.filter(m => m.role === 'tool').at(-1)), /Evidence\. Focus:/)
     }
@@ -345,7 +346,7 @@ test('one session switches direct and extract both ways without fetching again',
   const results = agent.session.snapshotEvents().filter(e => e.type === 'tool/result' && e.data.meta?.mode)
   assert.deepEqual(results.map(e => e.data.meta.mode), ['direct', 'extract', 'direct', 'extract'])
   assert.ok(results.slice(1).every(e => e.data.meta.content === undefined))
-  assert.match(textOf(results[2].data.message), /Page text for S1 was already returned earlier in this session\./)
+  assert.match(textOf(results[2].data.message), /Saved page reused\.[\s\S]*Page text:[\s\S]*FULL BODY ONLY/)
 })
 
 

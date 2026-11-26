@@ -55,7 +55,6 @@ const evidenceSchema = z.object({
 const materialSchema = sourceSchema.extend({
   handle: z.string(),
   fetched: fetchedSchema.optional(),
-  pageShown: z.boolean().optional(),
   evidence: z.array(evidenceSchema).optional(),
 })
 
@@ -95,7 +94,6 @@ export interface ReadOutcome {
   mode: ReadMode
   fetched?: FetchedContent | undefined
   fetchedNow: boolean
-  pageAlreadyShown: boolean
   focus?: string | undefined
   evidence?: string | undefined
   error?: string | undefined
@@ -185,9 +183,6 @@ export function applyReadMeta(
         }
       : item
     if (error !== undefined) return updated
-    if (mode === 'direct' && updated.fetched !== undefined && updated.pageShown !== true) {
-      updated = { ...updated, pageShown: true }
-    }
     if (mode === 'extract' && evidenceGroup?.evidence?.trim()) {
       updated = {
         ...updated,
@@ -208,7 +203,6 @@ export function applyReadMeta(
       mode,
       ...(saved.fetched !== undefined ? { fetched: saved.fetched } : {}),
       fetchedNow: previous?.fetched === undefined && saved.fetched !== undefined,
-      pageAlreadyShown: previous?.pageShown === true,
       ...(evidenceGroup?.focus !== undefined ? { focus: evidenceGroup.focus } : {}),
       ...(evidenceGroup?.evidence !== undefined ? { evidence: evidenceGroup.evidence } : {}),
       ...(error !== undefined ? { error } : {}),

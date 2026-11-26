@@ -154,14 +154,12 @@ test('direct read results correlate out of order, save and reuse bodies, and rep
 })
 
 
-test('mixed read modes preserve caches, mark pageShown once, and ignore failures', () => {
+test('mixed read modes preserve caches and ignore failures', () => {
   const f = fixture()
   f.result(f.read(), { ...success(), mode: 'extract' })
-  assert.equal(f.state.items.S1.pageShown, undefined)
   const saved = structuredClone(f.state.items.S1)
   const extract = f.read(), direct = f.read()
   f.result(direct, { requestUrl: A, mode: 'direct' })
-  assert.equal(f.state.items.S1.pageShown, true)
   assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
   const afterDirect = structuredClone(f.state.items.S1)
   f.result(f.read(), { requestUrl: A, mode: 'extract', focus: 'facts', error: 'Extraction failed' })
@@ -171,7 +169,6 @@ test('mixed read modes preserve caches, mark pageShown once, and ignore failures
   f.result(extract, { requestUrl: A, mode: 'extract', focus: 'facts', evidence: '' })
   assert.deepEqual(f.state.items.S1.fetched, saved.fetched)
   assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
-  assert.equal(f.state.items.S1.pageShown, true)
   f.result(f.read(), { requestUrl: A, mode: 'invalid', focus: 'facts', evidence: 'Invalid' })
   assert.deepEqual(f.state.items.S1.evidence, saved.evidence)
   assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
@@ -202,13 +199,14 @@ test('research attempts count independently of results and reset without removin
   assert.deepEqual(f.state.items, items)
 })
 
-test('direct read sets pageShown only when fetched content exists and preserves replay', () => {
+test('direct read persists fetched content once and preserves replay', () => {
   const f = fixture()
   f.result(f.call('web_read', { target: A, mode: 'direct' }), { requestUrl: A, mode: 'direct', error: 'Fetch failed: HTTP 500' })
-  assert.equal(f.state.items.S1.pageShown, undefined)
+  assert.equal(f.state.items.S1.fetched, undefined)
   f.result(f.call('web_read', { target: 'S1', mode: 'direct' }), { requestUrl: A, mode: 'direct', ...page })
-  assert.equal(f.state.items.S1.pageShown, true)
+  const saved = structuredClone(f.state.items.S1.fetched)
+  assert.ok(saved)
   f.result(f.call('web_read', { target: 'S1', mode: 'direct' }), { requestUrl: A, mode: 'direct' })
-  assert.equal(f.state.items.S1.pageShown, true)
+  assert.deepEqual(f.state.items.S1.fetched, saved)
   assert.deepEqual(f.events.reduce(applyMaterials, materialsProjection.init()), f.state)
 })
