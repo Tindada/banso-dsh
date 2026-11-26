@@ -64,12 +64,27 @@ async function setup(t, limit) {
   return { ctx, fiber, agent, other, state, resolve, names, budgetSection, budgetContext, call, execute }
 }
 
-test('configuration accepts zero and safe integer limits and defaults to 15', () => {
+test('configuration accepts false, zero, and safe integer limits and defaults to 15', () => {
   assert.equal(Materials.Config({}).researchBudget, 15)
-  for (const researchBudget of [0, 1, Number.MAX_SAFE_INTEGER]) assert.equal(Materials.Config({ researchBudget }).researchBudget, researchBudget)
-  for (const researchBudget of [-1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+  for (const researchBudget of [false, 0, 1, Number.MAX_SAFE_INTEGER]) assert.equal(Materials.Config({ researchBudget }).researchBudget, researchBudget)
+  for (const researchBudget of [true, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(() => Materials.Config({ researchBudget }))
   }
+})
+
+test('false budget disables research budget limits, prompt section, and footer', async t => {
+  const h = await setup(t, false)
+  assert.ok((await h.names(h.agent)).includes('web_search'))
+  assert.ok((await h.names(h.agent)).includes('web_read'))
+  assert.equal(await h.budgetSection(h.agent), undefined)
+  assert.equal(await h.budgetContext(h.agent), undefined)
+  for (let i = 0; i < 3; i++) {
+    const result = await h.execute(h.call())
+    assert.doesNotMatch(textOf(result), /budget exhausted/)
+    assert.doesNotMatch(textOf(result), /Research budget:/)
+  }
+  assert.ok((await h.names(h.agent)).includes('web_search'))
+  assert.ok((await h.names(h.agent)).includes('web_read'))
 })
 
 test('zero budget hides both tools without adding runtime context', async t => {

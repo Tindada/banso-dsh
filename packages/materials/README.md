@@ -51,7 +51,7 @@ dsh --profile web
 
 | 字段 | 默认值 | 用途 |
 | --- | --- | --- |
-| `researchBudget` | 15 | 每轮允许的 search/read 调用次数；非负安全整数，0 禁用这两种调用 |
+| `researchBudget` | 15 | 每轮允许的 search/read 调用次数；非负安全整数（0 禁用这两种调用），或设为 `false` 关闭预算限制与预算提示 |
 | `provider`、`model` | 当前 session 最新请求的模型路由 | 必须成对覆盖；没有路由时提取失败 |
 | `maxInputBytes` | 200,000 | 提取系统提示词与序列化输入的 UTF-8 字节上限，超限报错而不截取 |
 | `maxOutputTokens` | 4,096 | 提取输出上限；达到上限不保存残缺证据 |
@@ -133,7 +133,7 @@ const material = state?.items.S1
 
 ## 共享研究预算
 
-`researchBudget` 控制每轮 search/read 的共享额度，配置示例见上方 Profile 配置。每轮开始时用量清零，已有材料继续保留。
+`researchBudget` 控制每轮 search/read 的共享额度，配置示例见上方 Profile 配置；设为 `false` 时关闭预算限制，不注入 `banso:research-budget` 提示，也不在工具结果末尾附加剩余额度。每轮开始时用量清零，已有材料继续保留。
 
 每次 `web_search` 或 `web_read` 调用尝试都计数，包括参数错误、失败、取消和被预算拒绝的调用。direct、extract 和正文缓存复用均计数，内部重试不重复计数；被禁用的 `web_fetch` 不计数。因此尝试次数可以超过额度，但获准执行的研究调用不会超过额度。
 

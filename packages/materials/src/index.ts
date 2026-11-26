@@ -21,11 +21,14 @@ export const name = 'banso-materials'
 export const inject = ['sessionProjections', 'agents', 'tools', 'web', 'llm', 'systemPrompt']
 
 export interface Config extends ReadConfig {
-  researchBudget: number
+  researchBudget: number | false
   maxDirectChars: number
 }
 export const Config: z<Config> = z.object({
-  researchBudget: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(15),
+  researchBudget: z.union([
+    z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER),
+    z.const(false),
+  ]).default(15),
   provider: z.string(),
   model: z.string(),
   maxInputBytes: z.number().step(1).min(1).default(200_000).description('Maximum UTF-8 bytes sent to the extraction model in web_read extract mode.'),
@@ -39,12 +42,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     throw new Error('Extraction provider and model must be configured together')
   }
   const projection = await ctx.sessionProjections.register(materialsProjection)
-  ctx.tools.register(createReadTool(ctx, config, projection), {
-    when: context => config.researchBudget > 0 && projection.stateOf(context.agent.session).budget.used < config.researchBudget,
-  })
+  const budget = config.researchBudget
+  ctx.tools.register(
+    createReadTool(ctx, config, projection),
+    budget !== false
+      ? { when: context => budget > 0 && projection.stateOf(context.agent.session).budget.used < budget }
+      : undefined,
+  )
   registerWebGuidance(ctx)
-  registerSearchWrapper(ctx, config.researchBudget, projection)
+  registerSearchWrapper(ctx, budget !== false ? budget : undefined, projection)
   registerFetchRestriction(ctx)
-  registerResearchBudget(ctx, config.researchBudget, projection)
+  if (budget !== false) registerResearchBudget(ctx, budget, projection)
   registerResultRenderer(ctx, projection, config.maxDirectChars, config.maxInputBytes)
 }
