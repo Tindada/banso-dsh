@@ -256,6 +256,13 @@ test('HTTP and network failures skip extraction; extraction failures retain the 
   assert.equal(http.meta.extractMs, undefined)
   h.results.fetch = new Error('offline')
   assert.equal((await h.execute(agent)).meta.error, 'Fetch failed: offline')
+  const endpointGuidance = '\n\nThe web request used endpoint "https://api.deepseek.com/v1/tools/fetch". Check base URL.'
+  h.results.fetch = new Error(`DeepSeek API error (HTTP 404): failed to fetch URL (request_id: r1)${endpointGuidance}`)
+  assert.equal((await h.execute(agent)).meta.error, 'Fetch failed: DeepSeek API error (HTTP 404): failed to fetch URL (request_id: r1)')
+  h.results.fetch = new Error(`DeepSeek API error (HTTP 504): Request timeout (request_id: r2)${endpointGuidance}`)
+  assert.equal((await h.execute(agent)).meta.error, 'Fetch failed: DeepSeek API error (HTTP 504): Request timeout (request_id: r2)')
+  h.results.fetch = new Error(`DeepSeek API error (HTTP 401): unauthorized${endpointGuidance}`)
+  assert.equal((await h.execute(agent)).meta.error, `Fetch failed: DeepSeek API error (HTTP 401): unauthorized${endpointGuidance}`)
   assert.equal(h.adapter.requests.length, 0)
   h.results.fetch = { url, statusCode: 200, body: { kind: 'text', content: 'RAW BODY' }, truncated: true }
   h.adapter.text = 'Line 1\t"quoted"\nLine 2\u0007'

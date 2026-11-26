@@ -26,7 +26,16 @@ interface PageResult {
   content?: string | undefined
   title?: string | undefined
 }
-const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error)
+const ENDPOINT_GUIDANCE = '\n\nThe web request used endpoint '
+const TRANSIENT_OR_TARGET_FAILURE = /failed to fetch URL|\bHTTP (?:429|5\d\d)\b/i
+
+function formatFetchError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const index = message.indexOf(ENDPOINT_GUIDANCE)
+  if (index === -1) return message
+  const summary = message.slice(0, index)
+  return TRANSIENT_OR_TARGET_FAILURE.test(summary) ? summary : message
+}
 
 /** Acquire page data without mutating the projection; tool results commit the facts. */
 export async function getPage(
@@ -58,7 +67,7 @@ export async function getPage(
       meta.truncated = fetchedMeta.truncated
     } catch (error) {
       signal.throwIfAborted()
-      meta.error = `Fetch failed: ${errorText(error)}`
+      meta.error = `Fetch failed: ${formatFetchError(error)}`
       return { meta }
     } finally {
       meta.fetchMs = Math.round(performance.now() - started)
